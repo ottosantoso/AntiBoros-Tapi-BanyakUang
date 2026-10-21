@@ -1,0 +1,237 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+
+    color-scheme: light;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Light — premium fintech light */
+  :root {
+    --background: 210 40% 98%;
+    --background-elevated: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 222 89% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 20%;
+
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 20%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 89% 55%;
+
+    /* Finance semantic colors */
+    --income: 152 69% 46%;
+    --income-soft: 152 69% 46% / 0.12;
+    --income-fg: 152 60% 28%;
+    --expense: 347 77% 55%;
+    --expense-soft: 347 77% 55% / 0.12;
+    --expense-fg: 347 60% 36%;
+    --balance: 217 91% 60%;
+    --balance-soft: 217 91% 60% / 0.12;
+    --balance-fg: 217 70% 38%;
+    --savings: 262 83% 65%;
+    --savings-soft: 262 83% 65% / 0.12;
+    --savings-fg: 262 60% 42%;
+
+    --warning: 38 92% 50%;
+    --warning-soft: 38 92% 50% / 0.14;
+    --success: 142 71% 45%;
+    --success-soft: 142 71% 45% / 0.12;
+
+    /* Chart palette */
+    --chart-1: 217 91% 60%;
+    --chart-2: 152 69% 46%;
+    --chart-3: 262 83% 65%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 347 77% 55%;
+    --chart-6: 199 89% 52%;
+    --chart-7: 330 81% 60%;
+    --chart-8: 174 72% 42%;
+
+    --radius: 0.875rem;
+
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+  }
+
+  /* Dark — premium fintech dark (deep navy, not pure black) */
+  .dark {
+    --background: 222 47% 7%;
+    --background-elevated: 222 44% 11%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 44% 11%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 44% 13%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 217 91% 62%;
+    --primary-foreground: 222 47% 7%;
+
+    --secondary: 222 40% 16%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 222 36% 18%;
+    --muted-foreground: 217 19% 63%;
+
+    --accent: 222 40% 16%;
+    --accent-foreground: 210 40% 96%;
+
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 30% 20%;
+    --input: 222 30% 20%;
+    --ring: 217 91% 62%;
+
+    --income: 152 63% 52%;
+    --income-soft: 152 63% 52% / 0.16;
+    --income-fg: 152 60% 65%;
+    --expense: 347 80% 60%;
+    --expense-soft: 347 80% 60% / 0.16;
+    --expense-fg: 347 75% 70%;
+    --balance: 217 91% 65%;
+    --balance-soft: 217 91% 65% / 0.16;
+    --balance-fg: 217 90% 72%;
+    --savings: 262 83% 70%;
+    --savings-soft: 262 83% 70% / 0.16;
+    --savings-fg: 262 80% 76%;
+
+    --warning: 38 92% 56%;
+    --warning-soft: 38 92% 56% / 0.16;
+    --success: 142 71% 50%;
+    --success-soft: 142 71% 50% / 0.16;
+
+    --chart-1: 217 91% 65%;
+    --chart-2: 152 63% 52%;
+    --chart-3: 262 83% 70%;
+    --chart-4: 38 92% 56%;
+    --chart-5: 347 80% 60%;
+    --chart-6: 199 89% 56%;
+    --chart-7: 330 81% 64%;
+    --chart-8: 174 72% 48%;
+
+    --sidebar: 222 47% 9%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-border: 222 30% 18%;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  ::selection {
+    @apply bg-primary/25;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/25;
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  }
+
+  .glass-card {
+    @apply border border-border/60 bg-card/80 backdrop-blur-xl;
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Premium card hover lift */
+  .lift {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+  .lift:hover {
+    transform: translateY(-3px);
+  }
+
+  .gradient-text-income {
+    @apply bg-gradient-to-br from-[hsl(var(--income-fg))] to-[hsl(var(--income))];
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .gradient-text-expense {
+    @apply bg-gradient-to-br from-[hsl(var(--expense-fg))] to-[hsl(var(--expense))];
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .gradient-text-balance {
+    @apply bg-gradient-to-br from-[hsl(var(--balance-fg))] to-[hsl(var(--balance))];
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+@layer utilities {
+  .bg-elevated {
+    background-color: hsl(var(--background-elevated));
+  }
+  .text-income { color: hsl(var(--income)); }
+  .text-expense { color: hsl(var(--expense)); }
+  .text-balance { color: hsl(var(--balance)); }
+  .text-savings { color: hsl(var(--savings)); }
+  .bg-income-soft { background-color: hsl(var(--income-soft)); }
+  .bg-expense-soft { background-color: hsl(var(--expense-soft)); }
+  .bg-balance-soft { background-color: hsl(var(--balance-soft)); }
+  .bg-savings-soft { background-color: hsl(var(--savings-soft)); }
+  .bg-warning-soft { background-color: hsl(var(--warning-soft)); }
+  .bg-success-soft { background-color: hsl(var(--success-soft)); }
+  .ring-income { --tw-ring-color: hsl(var(--income)); }
+  .border-income\/40 { border-color: hsl(var(--income) / 0.4); }
+}
