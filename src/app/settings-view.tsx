@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { getApiUrl, setApiUrl, hasApiUrl } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { getApiUrl, setApiUrl } from '@/lib/api';
+
+const DEFAULT_APPS_SCRIPT_URL =
+  'https://script.google.com/macros/s/AKfycbzV2rfDhhS5nf4J9wRLtuhpVu_vdvGiXrn_9QzS02FvbQ74YPUWS1DrI-p-wfa4kI25/exec?key=ca9d942b56bc480dbb910454cd6a5666';
 
 interface Props {
   onSaved: () => void;
@@ -18,8 +20,14 @@ export function SettingsView({ onSaved }: Props) {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setUrl(getApiUrl());
-    setSaved(hasApiUrl());
+    const savedUrl = getApiUrl();
+    if (savedUrl) {
+      setUrl(savedUrl);
+      setSaved(true);
+    } else {
+      setUrl(DEFAULT_APPS_SCRIPT_URL);
+      setSaved(false);
+    }
   }, []);
 
   const isValid = /https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec/i.test(url.trim());
@@ -74,7 +82,7 @@ export function SettingsView({ onSaved }: Props) {
           <Input
             id="api-url"
             type="url"
-            placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+            placeholder="https://script.google.com/macros/s/AKfycbzV2rfDhhS5nf4J9wRLtuhpVu_vdvGiXrn_9QzS02FvbQ74YPUWS1DrI-p-wfa4kI25/exec?key=ca9d942b56bc480dbb910454cd6a5666"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className={cn(url && !isValid && 'border-destructive/50 focus-visible:ring-destructive/40')}
