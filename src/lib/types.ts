@@ -1,7 +1,9 @@
 export type TransactionType = 'Pemasukan' | 'Pengeluaran';
 
 export interface Wallet {
+  id: string;
   nama: string;
+  provider: string;
   saldo: number;
 }
 
@@ -53,6 +55,30 @@ export interface WalletMeta extends Wallet {
   gradient: string;
   glyph: string;
   negative: boolean;
+}
+
+/* ---------- Wallet management (CRUD) ---------- */
+
+export interface AddWalletPayload {
+  action: 'addWallet';
+  nama: string;
+  provider: string;
+  saldo: number;
+}
+
+export interface UpdateWalletPayload {
+  action: 'updateWallet';
+  id: string;
+  nama: string;
+  provider: string;
+  saldo: number;
+}
+
+export interface DeleteWalletPayload {
+  action: 'deleteWallet';
+  id: string;
+  /** Optional: move transactions from the deleted wallet to this target id. */
+  moveTo?: string;
 }
 
 /* ---------- AI Smart Scanner ---------- */

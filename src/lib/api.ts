@@ -1,4 +1,4 @@
-import type { DashboardData, NewTransaction, ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType } from './types';
+import type { DashboardData, NewTransaction, ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType, AddWalletPayload, UpdateWalletPayload, DeleteWalletPayload } from './types';
 
 const LS_KEY = 'hepeng.appsScriptUrl';
 
@@ -29,7 +29,12 @@ function buildUrl(base: string, action: string, dateParams?: { start?: string; e
 function normaliseDashboard(raw: unknown): DashboardData {
   const d = (raw ?? {}) as Partial<DashboardData>;
   const dompet = Array.isArray(d.dompet)
-    ? d.dompet.map((w) => ({ nama: String(w.nama), saldo: Number(w.saldo) || 0 }))
+    ? d.dompet.map((w) => ({
+        id: String((w as Record<string, unknown>).id ?? ''),
+        nama: String(w.nama),
+        provider: String((w as Record<string, unknown>).provider ?? w.nama),
+        saldo: Number(w.saldo) || 0,
+      }))
     : [];
   const topPengeluaran = Array.isArray(d.topPengeluaran)
     ? d.topPengeluaran.map((t) => ({ deskripsi: String(t.deskripsi), nominal: Number(t.nominal) || 0 }))

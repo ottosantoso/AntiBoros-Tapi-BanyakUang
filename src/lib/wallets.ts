@@ -28,7 +28,7 @@ const DEFAULT_STYLE: BrandStyle = {
 };
 
 export function getWalletMeta(wallet: Wallet): WalletMeta {
-  const key = wallet.nama.toUpperCase().replace(/[\s-]/g, '');
+  const key = (wallet.provider || wallet.nama).toUpperCase().replace(/[\s-]/g, '');
   const style = BRANDS[key] ?? DEFAULT_STYLE;
   return {
     ...wallet,
@@ -42,6 +42,11 @@ export function getWalletMeta(wallet: Wallet): WalletMeta {
 export function walletGlyph(name: string): string {
   const key = name.toUpperCase().replace(/[\s-]/g, '');
   return (BRANDS[key] ?? DEFAULT_STYLE).glyph;
+}
+
+/** Generate a stable-ish client-side id for demo-mode wallets. */
+export function generateWalletId(): string {
+  return `w_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export const WALLET_NAMES = Object.keys(BRANDS);
