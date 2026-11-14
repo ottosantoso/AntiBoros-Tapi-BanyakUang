@@ -26,11 +26,15 @@ export interface DashboardData {
 }
 
 export interface Transaction {
+  id?: string;
   tanggal: string;
   deskripsi: string;
   tipe: TransactionType;
   nominal: number;
+  /** Nama dompet untuk tampilan. */
   dompet: string;
+  /** ID dompet di database. */
+  walletId?: string;
   kategori?: string;
 }
 
