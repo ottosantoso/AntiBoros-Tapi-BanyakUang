@@ -287,7 +287,13 @@ export function ScannerView({ wallets, onSaved }: Props) {
 
     setSaving(false);
     if (ok > 0 && fail === 0) {
-      toast.success('Tersimpan ke database', { description: `${ok} transaksi berhasil disimpan.` });
+      const tanggalSimpan = result?.imageType === 'struk' && strukItems.length > 0 ? receipt.tanggal : '';
+      const diLuarBulan = tanggalSimpan !== '' && tanggalSimpan.slice(0, 7) !== toISODate().slice(0, 7);
+      toast.success('Tersimpan ke database', {
+        description: diLuarBulan
+          ? `${ok} transaksi tersimpan dengan tanggal ${formatTanggalPanjang(tanggalSimpan)}. Ubah periode di atas untuk melihatnya.`
+          : `${ok} transaksi berhasil disimpan.`,
+      });
       onSaved();
       reset();
     } else if (ok > 0 && fail > 0) {
@@ -669,6 +675,13 @@ function TypeToggle({
   );
 }
 
+/** Contoh: "2026-09-24" -> "24 September 2026". */
+function formatTanggalPanjang(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 function StrukItemsReview({
   items,
   total,
@@ -701,6 +714,7 @@ function StrukItemsReview({
   const allSelected = selected.length === items.length;
   // Hanya beri peringatan saat semua item dicentang, karena selisih wajar kalau ada item yang tidak dipilih.
   const mismatch = allSelected && total > 0 && selectedTotal !== total;
+  const tanggalBeda = tanggal.length >= 7 && tanggal.slice(0, 7) !== toISODate().slice(0, 7);
 
   return (
     <Card className="space-y-5 p-5">
@@ -714,6 +728,11 @@ function StrukItemsReview({
         <div className="space-y-2">
           <Label>Tanggal</Label>
           <Input type="date" value={tanggal} onChange={(e) => onTanggalChange(e.target.value)} />
+          {tanggalBeda && (
+            <p className="text-xs font-medium leading-relaxed text-amber-600 dark:text-amber-400">
+              Tanggal {formatTanggalPanjang(tanggal)} di luar bulan ini, jadi transaksi tidak muncul di daftar bulan ini. Periksa lagi jika itu salah baca.
+            </p>
+          )}
         </div>
         <div className="space-y-2">
           <Label>Dompet</Label>
