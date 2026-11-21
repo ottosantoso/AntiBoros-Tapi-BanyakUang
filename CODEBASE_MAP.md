@@ -40,6 +40,7 @@ src/
     add-transaction-sheet.tsx   form tambah transaksi (side sheet), simpan via Apps Script
     add-wallet-sheet.tsx        form tambah dompet: pilih bank/e-wallet/lainnya, nama, saldo awal opsional,
                                 deteksi nama dompet arsip (pulihkan atau ganti nama arsip lalu buat baru)
+    edit-wallet-sheet.tsx       form ubah dompet aktif: nama, provider (jenis mengikuti provider, atau pilih untuk Lainnya), logo. Saldo tidak diubah dari sini.
     ui/                         komponen shadcn (jangan diedit manual)
   lib/
     supabase-client.ts      createClient dari env VITE_* (cek env, exporter supabaseConfigured)
@@ -70,7 +71,8 @@ Polling ulang tiap 30 detik. Setelah tulis data, view memanggil `onSaved/onSubmi
 - Trigger (migrasi ke-2): insert/update/delete transaksi menyesuaikan `wallets.saldo`. Transfer menyesuaikan saldo asal/tujuan dan membuat transaksi "Biaya admin transfer" bila `biaya_admin > 0`.
 - Migrasi ke-3 `20261121120000_user_scoping_rls.sql`: kolom `user_id` (default auth.uid()) di ketiga tabel; RLS hanya pemilik (`auth.uid() = user_id`); anon dicabut; trigger memastikan dompet milik pengguna yang sama. Backfill data lama dan NOT NULL dijalankan manual setelah akun pertama dibuat.
 - Migrasi `20261121130000_wallet_jenis_logo.sql`: kolom `jenis` ('bank'|'ewallet'|'lainnya') dan `logo_url` di `wallets`; bucket publik `wallet-logos` dengan policy per folder user.
-- Migrasi `20261122090000_wallet_archive.sql` (BELUM DIJALANKAN di Supabase, lihat Status migrasi): kolom `wallets.is_archived` (default false) dan `wallets.archived_at`; trigger `guard_archived_tx` dan `guard_archived_transfer` yang menolak transaksi atau transfer BARU (atau yang dialihkan) ke dompet arsip. Transaksi dan transfer lama di dompet arsip tetap bisa diubah dan dihapus. Saldo dompet arsip tetap tersimpan.
+- Migrasi `20261122120000_wallet_edit_grants.sql`: `GRANT UPDATE (jenis, logo_url)` untuk `authenticated` agar menu edit dompet bisa menyimpan. `saldo` dan `user_id` tetap tidak bisa diubah langsung.
+- Migrasi `20261122090000_wallet_archive.sql`: kolom `wallets.is_archived` (default false) dan `wallets.archived_at`; trigger `guard_archived_tx` dan `guard_archived_transfer` yang menolak transaksi atau transfer BARU (atau yang dialihkan) ke dompet arsip. Transaksi dan transfer lama di dompet arsip tetap bisa diubah dan dihapus. Saldo dompet arsip tetap tersimpan.
 
 ## Status migrasi (PENTING sebelum mengubah kode)
 Proyek sedang pindah dari Google Apps Script/Sheets ke Supabase; belum selesai:
@@ -79,7 +81,7 @@ Proyek sedang pindah dari Google Apps Script/Sheets ke Supabase; belum selesai:
 3. Fitur transfer antar dompet: tabel, trigger, dan type (`WalletTransfer`, `NewTransferInput`) ada, tapi belum ada fungsi di `data.ts` maupun UI.
 4. Teks UI masih menyebut Google Sheets (lihat Temuan).
 5. Dugaan kuat bermasalah: migrasi ke-2 menjalankan `REVOKE UPDATE (saldo)` pada `wallets`, tapi migrasi ke-1 sudah memberi `GRANT UPDATE` di level tabel. Di PostgreSQL, REVOKE pada kolom tidak mencabut privilege level tabel, jadi REVOKE ini kemungkinan tidak berpengaruh. Sementara `updateWalletRow` di `data.ts` mengirim `saldo` di payload update. Perlu dicek langsung di database.
-6. Migrasi `20261122090000_wallet_archive.sql` harus dijalankan di Supabase sebelum fitur arsip dipakai. Sebelum dijalankan, tombol arsip akan gagal karena kolom `is_archived` belum ada.
+6. Migrasi `20261122090000_wallet_archive.sql` sudah terlihat di database (kolom `is_archived` ada). Migrasi `20261122120000_wallet_edit_grants.sql` sudah dijalankan dan hak aksesnya sudah diverifikasi.
 
 ## Perubahan terbaru (branch `feat/tambah-dompet`)
 - Logo SVG provider di sheet Tambah Dompet, termasuk blu by BCA Digital (`wallet-providers.ts`, `public/assets/wallet-logos/`).

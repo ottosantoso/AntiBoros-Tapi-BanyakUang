@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Archive, Plus, RotateCcw } from 'lucide-react';
+import { Archive, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DashboardData, Wallet } from '@/lib/types';
 import { WalletGrid } from '@/components/wallet-card';
@@ -16,7 +16,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { archiveWalletRow, fetchArchivedWallets, restoreWalletRow, type ArchivedWallet } from '@/lib/data';
+import {
+  archiveWalletRow,
+  fetchArchivedWallets,
+  restoreWalletRow,
+  type ArchivedWallet,
+  type WalletEditInput,
+  type WriteResult,
+} from '@/lib/data';
+import { EditWalletSheet } from '@/components/edit-wallet-sheet';
 import { formatIDR, formatIDRCompact } from '@/lib/format';
 import { getWalletMeta } from '@/lib/wallets';
 
@@ -24,11 +32,13 @@ export function WalletsView({
   data,
   loading,
   onAddWallet,
+  editWallet,
   onChanged,
 }: {
   data: DashboardData;
   loading: boolean;
   onAddWallet: () => void;
+  editWallet: (id: string, input: WalletEditInput) => Promise<WriteResult>;
   /** Dipanggil setelah dompet diarsipkan atau dipulihkan, agar data dashboard ikut diperbarui. */
   onChanged: () => void;
 }) {
@@ -40,6 +50,7 @@ export function WalletsView({
 
   const [archived, setArchived] = useState<ArchivedWallet[]>([]);
   const [target, setTarget] = useState<Wallet | null>(null);
+  const [editTarget, setEditTarget] = useState<Wallet | null>(null);
   const [busy, setBusy] = useState(false);
 
   const muatArsip = useCallback(async () => {
@@ -170,6 +181,15 @@ export function WalletsView({
                   <Button
                     variant="ghost"
                     size="icon"
+                    aria-label={`Ubah ${w.nama}`}
+                    title="Ubah dompet"
+                    onClick={() => setEditTarget(w)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     aria-label={`Arsipkan ${w.nama}`}
                     title="Arsipkan dompet"
                     onClick={() => setTarget(w)}
@@ -219,6 +239,16 @@ export function WalletsView({
             })}
           </div>
         </Card>
+      )}
+
+      {editTarget && (
+        <EditWalletSheet
+          key={editTarget.id}
+          wallet={editTarget}
+          editWallet={editWallet}
+          onSubmitted={onChanged}
+          onClose={() => setEditTarget(null)}
+        />
       )}
 
       <AlertDialog open={target !== null} onOpenChange={(open) => !open && setTarget(null)}>

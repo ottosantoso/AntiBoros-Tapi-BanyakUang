@@ -17,6 +17,7 @@ import {
   type NewTransactionInput,
   type UpdateTransactionInput,
   type WalletInput,
+  type WalletEditInput,
 } from './data';
 
 type Status = 'idle' | 'loading' | 'connected' | 'error';
@@ -106,7 +107,7 @@ export function useDashboard(range: { from?: Date; to?: Date }) {
 
   const addWallet = useCallback(async (input: WalletInput) => insertWallet(input), []);
 
-  const editWallet = useCallback(async (id: string, input: WalletInput) => updateWalletRow(id, input), []);
+  const editWallet = useCallback(async (id: string, input: WalletEditInput) => updateWalletRow(id, input), []);
 
   const removeWallet = useCallback(
     async (wallet: Wallet, moveTo?: string) => {

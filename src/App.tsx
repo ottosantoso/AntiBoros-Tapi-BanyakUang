@@ -60,6 +60,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
     editTransaction,
     addTransfer,
     addWallet,
+    editWallet,
   } = useDashboard(dateRange);
 
   const loading = status === 'loading';
@@ -129,6 +130,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                   data={data}
                   loading={loading}
                   onAddWallet={() => setWalletSheetOpen(true)}
+                  editWallet={editWallet}
                   onChanged={handleRefresh}
                 />
               )}
