@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, LogIn, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,8 @@ function translateAuthError(message: string): string {
 export function LoginView() {
   const [tab, setTab] = useState<'masuk' | 'daftar'>('masuk');
   const [busy, setBusy] = useState(false);
+  const [showLoginPwd, setShowLoginPwd] = useState(false);
+  const [showSignupPwd, setShowSignupPwd] = useState(false);
 
   const loginForm = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -109,13 +111,15 @@ export function LoginView() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-background px-4 py-10">
-      <Card className="w-full max-w-md border-[#dbeafe] bg-white shadow-[0_18px_40px_rgba(37,99,235,0.08)]">
+      <Card className="w-full max-w-md border-border bg-card shadow-xl">
         <CardHeader className="items-center space-y-3 text-center">
           <Logo size={52} />
-          <CardTitle className="font-display text-2xl font-extrabold tracking-[-0.03em] text-[#172554]">
+          <CardTitle className="font-display text-2xl font-extrabold tracking-[-0.03em] text-foreground">
             Hepeng History
           </CardTitle>
-          <CardDescription>Masuk untuk melihat dompet dan transaksi Anda.</CardDescription>
+          <CardDescription className="text-muted-foreground">
+            Masuk untuk melihat dompet dan transaksi Anda.
+          </CardDescription>
         </CardHeader>
 
         <CardContent>
@@ -131,17 +135,20 @@ export function LoginView() {
                   <Input
                     id="login-email"
                     type="email"
+                    placeholder="nama@email.com"
                     autoComplete="email"
                     aria-invalid={!!loginErr.email}
                     {...loginForm.register('email')}
                   />
                 </Field>
                 <Field id="login-password" label="Password" error={loginErr.password?.message}>
-                  <Input
+                  <PasswordInput
                     id="login-password"
-                    type="password"
+                    placeholder="Masukkan password"
                     autoComplete="current-password"
-                    aria-invalid={!!loginErr.password}
+                    visible={showLoginPwd}
+                    onToggle={() => setShowLoginPwd((v) => !v)}
+                    invalid={!!loginErr.password}
                     {...loginForm.register('password')}
                   />
                 </Field>
@@ -150,12 +157,12 @@ export function LoginView() {
                     type="button"
                     onClick={onForgot}
                     disabled={busy}
-                    className="text-xs font-semibold text-[#2563eb] hover:underline disabled:opacity-50"
+                    className="text-xs font-semibold text-primary hover:underline disabled:opacity-50"
                   >
                     Lupa password?
                   </button>
                 </div>
-                <Button type="submit" className="w-full gap-2 bg-[#2563eb] font-bold hover:bg-[#1d4ed8]" disabled={busy}>
+                <Button type="submit" className="w-full gap-2 font-bold" disabled={busy}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
                   Masuk
                 </Button>
@@ -167,6 +174,7 @@ export function LoginView() {
                 <Field id="signup-name" label="Nama" error={signupErr.name?.message}>
                   <Input
                     id="signup-name"
+                    placeholder="Nama lengkap Anda"
                     autoComplete="name"
                     aria-invalid={!!signupErr.name}
                     {...signupForm.register('name')}
@@ -176,21 +184,24 @@ export function LoginView() {
                   <Input
                     id="signup-email"
                     type="email"
+                    placeholder="nama@email.com"
                     autoComplete="email"
                     aria-invalid={!!signupErr.email}
                     {...signupForm.register('email')}
                   />
                 </Field>
-                <Field id="signup-password" label="Password (minimal 8 karakter)" error={signupErr.password?.message}>
-                  <Input
+                <Field id="signup-password" label="Password" hint="Minimal 8 karakter" error={signupErr.password?.message}>
+                  <PasswordInput
                     id="signup-password"
-                    type="password"
+                    placeholder="Minimal 8 karakter"
                     autoComplete="new-password"
-                    aria-invalid={!!signupErr.password}
+                    visible={showSignupPwd}
+                    onToggle={() => setShowSignupPwd((v) => !v)}
+                    invalid={!!signupErr.password}
                     {...signupForm.register('password')}
                   />
                 </Field>
-                <Button type="submit" className="w-full gap-2 bg-[#2563eb] font-bold hover:bg-[#1d4ed8]" disabled={busy}>
+                <Button type="submit" className="w-full gap-2 font-bold" disabled={busy}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
                   Buat akun
                 </Button>
@@ -203,16 +214,60 @@ export function LoginView() {
   );
 }
 
-function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: ReactNode }) {
+function Field({
+  id,
+  label,
+  hint,
+  error,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  error?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id}>{label}</Label>
+      <div className="flex items-baseline justify-between gap-2">
+        <Label htmlFor={id} className="text-foreground">
+          {label}
+        </Label>
+        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
+      </div>
       {children}
       {error && (
         <p id={`${id}-error`} className="text-xs font-medium text-destructive">
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+type PasswordInputProps = React.ComponentProps<typeof Input> & {
+  visible: boolean;
+  onToggle: () => void;
+  invalid: boolean;
+};
+
+function PasswordInput({ visible, onToggle, invalid, ...rest }: PasswordInputProps) {
+  return (
+    <div className="relative">
+      <Input
+        {...rest}
+        type={visible ? 'text' : 'password'}
+        aria-invalid={invalid}
+        className="pr-10"
+      />
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={visible ? 'Sembunyikan password' : 'Tampilkan password'}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted-foreground hover:text-foreground"
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
     </div>
   );
 }
