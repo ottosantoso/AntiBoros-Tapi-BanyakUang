@@ -51,6 +51,7 @@ export interface NewTransaction {
   tipe: TransactionType;
   nominal: number;
   dompet: string;
+  kategori?: string;
 }
 
 /** Normalised copy of a wallet with extra UI metadata. */

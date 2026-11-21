@@ -23,12 +23,17 @@ export default function App() {
 
   const handleRefresh = useCallback(() => refresh(), [refresh]);
 
+  const handleNavigate = useCallback((nextView: View) => {
+    setView(nextView);
+    setSheetOpen(nextView === 'transactions');
+  }, []);
+
   return (
     <ThemeProvider>
       <div className="flex min-h-screen bg-background text-foreground">
         <Sidebar
           view={view}
-          onNavigate={setView}
+          onNavigate={handleNavigate}
           connected={status === 'connected'}
           usingDemo={usingDemo}
         />
@@ -36,7 +41,7 @@ export default function App() {
         <div className="flex min-w-0 flex-1 flex-col">
           <Header
             view={view}
-            onNavigate={setView}
+            onNavigate={handleNavigate}
             onRefresh={handleRefresh}
             onAdd={() => setSheetOpen(true)}
             onDateRangeChange={setDateRange}
@@ -65,7 +70,7 @@ export default function App() {
 
               {view === 'dashboard' && <DashboardView data={data} loading={loading} dateRange={dateRange} />}
               {view === 'wallets' && <WalletsView data={data} loading={loading} />}
-              {view === 'transactions' && <TransactionsView data={data} loading={loading} />}
+              {view === 'transactions' && <TransactionsView data={data} loading={loading} onAdd={() => setSheetOpen(true)} />}
               {view === 'scanner' && (
                 <ScannerView wallets={data.dompet} onSaved={handleRefresh} />
               )}
