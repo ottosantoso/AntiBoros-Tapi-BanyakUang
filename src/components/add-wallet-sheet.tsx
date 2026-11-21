@@ -321,6 +321,10 @@ function ProviderTile({
   active: boolean;
   onClick: () => void;
 }) {
+  // Bila logo belum ada atau gagal dimuat, kembali ke tile berwarna dengan glyph.
+  const [logoGagal, setLogoGagal] = useState(false);
+  const tampilLogo = Boolean(provider.logo) && !logoGagal;
+
   return (
     <button
       type="button"
@@ -333,16 +337,28 @@ function ProviderTile({
       )}
     >
       {active && (
-        <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
+        <span className="absolute right-1 top-1 z-10 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
           <Check className="h-2.5 w-2.5" />
         </span>
       )}
-      <span
-        className="grid h-10 w-full place-items-center rounded-lg text-xs font-extrabold tracking-tight text-white"
-        style={{ backgroundColor: provider.color }}
-      >
-        {provider.glyph}
-      </span>
+      {tampilLogo ? (
+        <img
+          src={provider.logo}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          draggable={false}
+          onError={() => setLogoGagal(true)}
+          className="aspect-[3/1] w-full rounded-lg border border-border/60 bg-white object-contain"
+        />
+      ) : (
+        <span
+          className="grid aspect-[3/1] w-full place-items-center rounded-lg text-xs font-extrabold tracking-tight text-white"
+          style={{ backgroundColor: provider.color }}
+        >
+          {provider.glyph}
+        </span>
+      )}
       <span className="w-full truncate text-center text-[11px] font-medium text-foreground">{provider.nama}</span>
     </button>
   );
