@@ -24,6 +24,7 @@ const BRANDS: Record<string, BrandStyle> = {
   PERMATA: { brand: 'PermataBank', gradient: 'from-[#065f36] via-[#0c7a43] to-[#16a34a]', glyph: 'PMT' },
   DANAMON: { brand: 'Danamon', gradient: 'from-[#c2410c] via-[#ea7a10] to-[#f7941d]', glyph: 'DNM' },
   BTN: { brand: 'BTN', gradient: 'from-[#07366f] via-[#0a4fa0] to-[#2f7ad6]', glyph: 'BTN' },
+  BLU: { brand: 'blu by BCA Digital', gradient: 'from-[#0891b2] via-[#00a5c8] to-[#22d3ee]', glyph: 'BLU' },
   GOPAYLATER: { brand: 'GoPay Later', gradient: 'from-[#00a155] via-[#00bd5e] to-[#39e07f]', glyph: 'GPL' },
 };
 
