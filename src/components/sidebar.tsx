@@ -8,6 +8,7 @@ import {
   Settings,
   TrendingDown,
   TrendingUp,
+  LogOut,
   Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -45,12 +46,16 @@ export function Sidebar({
   onNavigate,
   connected,
   usingDemo,
+  userEmail,
+  onSignOut,
 }: {
   view: View;
   txSection: TransactionSection;
   onNavigate: (v: View, section?: TransactionSection) => void;
   connected: boolean;
   usingDemo: boolean;
+  userEmail: string;
+  onSignOut: () => void;
 }) {
   const [txOpen, setTxOpen] = useState(true);
   const txActive = view === 'transactions';
@@ -170,6 +175,13 @@ export function Sidebar({
             ? 'Hubungkan Supabase untuk menyimpan data.'
             : 'Semua perubahan tersimpan otomatis ke database.'}
         </p>
+      </div>
+      <div className="mt-auto border-t border-sidebar-border p-4">
+        <p className="truncate text-xs text-muted-foreground" title={userEmail}>{userEmail}</p>
+        <button type="button" onClick={onSignOut} className="mt-2 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-foreground transition hover:bg-accent/40">
+          <LogOut className="h-4 w-4" />
+          Keluar
+        </button>
       </div>
     </aside>
   );

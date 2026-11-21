@@ -23,7 +23,7 @@ Peta ini diverifikasi per file. Bagian yang belum dibuka tandai "belum diverifik
 ```
 index.html, vite.config.ts, tailwind.config.js, components.json (shadcn)
 .bolt/                      config & prompt Bolt. .bolt/ignore mengecualikan src/components/ui/* dan hooks/use-toast.ts
-supabase/migrations/        skema DB (2 file)
+supabase/migrations/        skema DB (3 file)
 src/
   main.tsx, App.tsx         entry; App memegang state view, dateRange, sheet tambah transaksi
   app/                      satu file per halaman
@@ -33,12 +33,14 @@ src/
     transactions-view.tsx   ringkasan + riwayat + filter (jenis, cari, dompet, tanggal)
     scanner-view.tsx        upload struk/mutasi -> scan AI (Apps Script) -> review -> simpan (Apps Script)
     settings-view.tsx       input URL Google Apps Script (localStorage)
+    login-view.tsx          halaman masuk, daftar, dan lupa password (Supabase Auth)
   components/
     sidebar, header, cashflow-charts, transaction-list, wallet-card, metric-card, date-range-picker,
     add-transaction-sheet.tsx   form tambah transaksi (side sheet), simpan via Apps Script
     ui/                         komponen shadcn (jangan diedit manual)
   lib/
-    supabase-client.ts      createClient dari env VITE_*
+    supabase-client.ts      createClient dari env VITE_* (cek env, exporter supabaseConfigured)
+    use-session.ts          hook sesi Supabase Auth (getSession + onAuthStateChange)
     data.ts                 SEMUA akses Supabase: fetchDashboardData, insertTransaction(s), CRUD wallet
     use-dashboard.ts        hook utama: load per date range, polling 30s, bungkus aksi tulis dari data.ts (aksi tulis belum dipakai UI)
     api.ts                  klien LAMA Google Apps Script (getDashboard, addTransaction, scanImage)
@@ -59,7 +61,7 @@ Polling ulang tiap 30 detik. Setelah tulis data, view memanggil `onSaved/onSubmi
 - `transactions(id, tanggal, deskripsi, tipe 'Pemasukan'|'Pengeluaran', nominal, kategori, wallet_id FK, berulang, transfer_id FK, created_at)`
 - `wallet_transfers(id, tanggal, from_wallet_id, to_wallet_id, nominal>0, biaya_admin>=0, catatan, created_at)`
 - Trigger (migrasi ke-2): insert/update/delete transaksi menyesuaikan `wallets.saldo`. Transfer menyesuaikan saldo asal/tujuan dan membuat transaksi "Biaya admin transfer" bila `biaya_admin > 0`.
-- RLS aktif, policy terbuka untuk `anon` dan `authenticated` (single-tenant tanpa login, disengaja).
+- Migrasi ke-3 `20261121120000_user_scoping_rls.sql`: kolom `user_id` (default auth.uid()) di ketiga tabel; RLS hanya pemilik (`auth.uid() = user_id`); anon dicabut; trigger memastikan dompet milik pengguna yang sama. Backfill data lama dan NOT NULL dijalankan manual setelah akun pertama dibuat.
 
 ## Status migrasi (PENTING sebelum mengubah kode)
 Proyek sedang pindah dari Google Apps Script/Sheets ke Supabase; belum selesai:

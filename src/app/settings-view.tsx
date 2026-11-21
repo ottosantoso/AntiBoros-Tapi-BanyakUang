@@ -8,9 +8,6 @@ import { toast } from 'sonner';
 import { getApiUrl, setApiUrl } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-const DEFAULT_APPS_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbzV2rfDhhS5nf4J9wRLtuhpVu_vdvGiXrn_9QzS02FvbQ74YPUWS1DrI-p-wfa4kI25/exec?key=ca9d942b56bc480dbb910454cd6a5666';
-
 interface Props {
   onSaved: () => void;
 }
@@ -26,7 +23,7 @@ export function SettingsView({ onSaved }: Props) {
       setUrl(savedUrl);
       setSaved(true);
     } else {
-      setUrl(DEFAULT_APPS_SCRIPT_URL);
+      setUrl('');
       setSaved(false);
     }
   }, []);
@@ -83,7 +80,7 @@ export function SettingsView({ onSaved }: Props) {
           <Input
             id="api-url"
             type="url"
-            placeholder="https://script.google.com/macros/s/AKfycbzV2rfDhhS5nf4J9wRLtuhpVu_vdvGiXrn_9QzS02FvbQ74YPUWS1DrI-p-wfa4kI25/exec?key=ca9d942b56bc480dbb910454cd6a5666"
+            placeholder="https://script.google.com/macros/s/ID_DEPLOYMENT/exec?key=KEY_ANDA"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             className={cn(url && !isValid && 'border-destructive/50 focus-visible:ring-destructive/40')}

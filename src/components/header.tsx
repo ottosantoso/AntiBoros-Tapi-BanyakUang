@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, ChevronDown, LayoutDashboard, List, Plus, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, UserRound, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, LayoutDashboard, List, LogOut, Plus, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Logo } from '@/components/logo';
@@ -26,6 +26,9 @@ export function Header({
   usingDemo,
   refreshing,
   showDateRange,
+  onSignOut,
+  userName,
+  userEmail,
 }: {
   view: View;
   txSection: TransactionSection;
@@ -38,6 +41,9 @@ export function Header({
   usingDemo: boolean;
   refreshing: boolean;
   showDateRange?: boolean;
+  onSignOut: () => void;
+  userName: string;
+  userEmail: string;
 }) {
   const title = view === 'transactions' ? TX_TITLES[txSection] : BASE_TITLES[view];
 
@@ -85,10 +91,16 @@ export function Header({
         <button type="button" aria-label="Notifikasi" className="hidden h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:bg-accent/40 hover:text-foreground xl:flex">
           <Bell className="h-[18px] w-[18px]" />
         </button>
-        <button type="button" aria-label="Profil" className="hidden items-center gap-1.5 rounded-full bg-card p-1 ring-1 ring-border xl:flex">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-amber-400/20 text-amber-300"><UserRound className="h-4 w-4" /></span>
-          <ChevronDown className="mr-1 h-4 w-4 text-muted-foreground" />
-        </button>
+        <div title={userEmail} className="hidden items-center gap-2.5 rounded-full bg-card py-1 pl-1 pr-3 ring-1 ring-border xl:flex">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{initialsOf(userName || userEmail)}</span>
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="max-w-[140px] truncate text-xs font-bold text-foreground">{userName || 'Pengguna'}</span>
+            <span className="max-w-[140px] truncate text-[11px] text-muted-foreground">{userEmail}</span>
+          </span>
+        </div>
+        <Button variant="outline" size="icon" onClick={onSignOut} aria-label="Keluar" title="Keluar" className="h-10 w-10 rounded-full border-border bg-card text-foreground">
+          <LogOut className="h-4 w-4" />
+        </Button>
 
         <div className="lg:hidden">
           <label className="sr-only" htmlFor="nav-select">Navigasi</label>
@@ -143,4 +155,9 @@ function LayoutIcon({ view, txSection }: { view: View; txSection: TransactionSec
   };
   const Icon = icons[view as Exclude<View, 'transactions'>];
   return <Icon className="h-5 w-5" strokeWidth={2.4} />;
+}
+
+function initialsOf(text: string): string {
+  const parts = text.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((w) => w[0]).join('').toUpperCase() || '?';
 }

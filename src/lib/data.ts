@@ -176,7 +176,7 @@ export async function insertTransaction(input: NewTransactionInput): Promise<Wri
   return { success: true, error: null };
 }
 
-export interface UpdateTransactionInput extends Partial<NewTransactionInput> {}
+export type UpdateTransactionInput = Partial<NewTransactionInput>;
 
 export async function updateTransactionRow(
   id: string,
@@ -251,7 +251,7 @@ export async function fetchTransfers(): Promise<{ transfers: WalletTransfer[]; e
       from: { id: string; nama: string } | null;
       to: { id: string; nama: string } | null;
     };
-    const transfers: WalletTransfer[] = (data ?? []).map((r: TransferRow) => ({
+    const transfers: WalletTransfer[] = ((data ?? []) as unknown as TransferRow[]).map((r) => ({
       id: r.id,
       tanggal: r.tanggal,
       fromWalletId: r.from?.id ?? '',
