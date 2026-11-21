@@ -69,7 +69,11 @@ export function LoginView() {
     const { data, error } = await supabase.auth.signUp({
       email: values.email,
       password: values.password,
-      options: { data: { name: values.name } },
+      options: {
+        data: { name: values.name },
+        // Link konfirmasi kembali ke alamat tempat aplikasi dibuka (localhost, atau domain deploy).
+        emailRedirectTo: window.location.origin,
+      },
     });
     setBusy(false);
 
