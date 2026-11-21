@@ -1,5 +1,7 @@
 export type TransactionType = 'Pemasukan' | 'Pengeluaran';
 
+export type TransactionSection = 'all' | 'income' | 'expense' | 'transfer';
+
 export interface Wallet {
   id: string;
   nama: string;
@@ -36,12 +38,37 @@ export interface Transaction {
   /** ID dompet di database. */
   walletId?: string;
   kategori?: string;
+  berulang?: boolean;
+  transferId?: string;
+  createdAt?: string;
 }
 
 export interface MonthlyTrend {
   bulan: string;
   pemasukan: number;
   pengeluaran: number;
+}
+
+export interface WalletTransfer {
+  id: string;
+  tanggal: string;
+  fromWalletId: string;
+  fromWallet: string;
+  toWalletId: string;
+  toWallet: string;
+  nominal: number;
+  biayaAdmin: number;
+  catatan?: string;
+  createdAt?: string;
+}
+
+export interface NewTransferInput {
+  tanggal: string;
+  fromWalletId: string;
+  toWalletId: string;
+  nominal: number;
+  biayaAdmin?: number;
+  catatan?: string;
 }
 
 export interface NewTransaction {
@@ -52,6 +79,7 @@ export interface NewTransaction {
   nominal: number;
   dompet: string;
   kategori?: string;
+  berulang?: boolean;
 }
 
 /** Normalised copy of a wallet with extra UI metadata. */
