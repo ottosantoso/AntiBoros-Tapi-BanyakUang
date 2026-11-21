@@ -1,3 +1,4 @@
+import type { Wallet } from './types';
 import type { DashboardData, MonthlyTrend, Transaction } from './types';
 import { shortMonth } from './format';
 
@@ -40,13 +41,13 @@ function buildTransactions(): Transaction[] {
 }
 
 export function demoDashboardData(): DashboardData {
-  const dompet = [
-    { id: 'w_bca', nama: 'BCA', provider: 'BCA', saldo: 4_500_000 },
-    { id: 'w_gopay', nama: 'GoPay', provider: 'GOPAY', saldo: 750_000 },
-    { id: 'w_ovo', nama: 'OVO', provider: 'OVO', saldo: 320_000 },
-    { id: 'w_dana', nama: 'DANA', provider: 'DANA', saldo: 580_000 },
-    { id: 'w_cash', nama: 'Cash', provider: 'CASH', saldo: 150_000 },
-    { id: 'w_shopeepay', nama: 'ShopeePay', provider: 'SHOPEEPAY', saldo: -85_000 },
+  const dompet: Wallet[] = [
+    { id: 'w_bca', nama: 'BCA', provider: 'BCA', saldo: 4_500_000 , jenis: 'bank', logoUrl: null },
+    { id: 'w_gopay', nama: 'GoPay', provider: 'GOPAY', saldo: 750_000 , jenis: 'ewallet', logoUrl: null },
+    { id: 'w_ovo', nama: 'OVO', provider: 'OVO', saldo: 320_000 , jenis: 'ewallet', logoUrl: null },
+    { id: 'w_dana', nama: 'DANA', provider: 'DANA', saldo: 580_000 , jenis: 'ewallet', logoUrl: null },
+    { id: 'w_cash', nama: 'Cash', provider: 'CASH', saldo: 150_000 , jenis: 'lainnya', logoUrl: null },
+    { id: 'w_shopeepay', nama: 'ShopeePay', provider: 'SHOPEEPAY', saldo: -85_000 , jenis: 'ewallet', logoUrl: null },
   ];
   const pemasukanBulanIni = 7_000_000;
   const pengeluaranBulanIni = 1_750_000;

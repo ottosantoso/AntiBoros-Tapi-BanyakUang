@@ -1,12 +1,15 @@
 import { AlertTriangle, Wallet2 } from 'lucide-react';
 import type { Wallet } from '@/lib/types';
 import { getWalletMeta } from '@/lib/wallets';
+import { providerLogo } from '@/lib/wallet-providers';
 import { formatIDR } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /** A single wallet rendered as a premium credit-card shape. */
 export function WalletCard({ wallet, index = 0 }: { wallet: Wallet; index?: number }) {
   const meta = getWalletMeta(wallet);
+  // Logo unggahan dulu; kalau tidak ada, pakai logo katalog untuk provider ini.
+  const logo = meta.logoUrl ?? providerLogo(wallet.provider);
   return (
     <div
       className={cn(
@@ -25,8 +28,12 @@ export function WalletCard({ wallet, index = 0 }: { wallet: Wallet; index?: numb
             <p className="text-[11px] font-medium uppercase tracking-wider text-white/70">Dompet</p>
             <p className="font-display text-base font-bold leading-tight">{meta.brand}</p>
           </div>
-          <div className="grid h-9 w-12 place-items-center rounded-md bg-white/15 text-xs font-bold tracking-wide backdrop-blur-sm">
-            {meta.glyph}
+          <div className="grid h-9 w-12 place-items-center overflow-hidden rounded-md bg-white/15 text-xs font-bold tracking-wide backdrop-blur-sm">
+            {logo ? (
+              <img src={logo} alt="" className="h-full w-full object-contain p-1" />
+            ) : (
+              meta.glyph
+            )}
           </div>
         </div>
 

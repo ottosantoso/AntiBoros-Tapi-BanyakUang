@@ -17,6 +17,11 @@ interface WalletRow {
   nama: string;
   provider: string;
   saldo: number | string;
+  jenis?: string | null;
+  logo_url?: string | null;
+  is_archived?: boolean | null;
+  archived_at?: string | null;
+  created_at?: string | null;
 }
 
 interface TransactionRow {
@@ -37,7 +42,19 @@ function toNumber(v: number | string): number {
 }
 
 function walletFromRow(r: WalletRow): Wallet {
-  return { id: r.id, nama: r.nama, provider: r.provider, saldo: toNumber(r.saldo) };
+  return {
+    id: r.id,
+    nama: r.nama,
+    provider: r.provider,
+    saldo: toNumber(r.saldo),
+    jenis: (r.jenis === 'ewallet' || r.jenis === 'lainnya' ? r.jenis : 'bank') as Wallet['jenis'],
+    logoUrl: r.logo_url ?? null,
+  };
+}
+
+/** Escape karakter khusus LIKE supaya nama dicocokkan apa adanya. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 function transactionFromRow(r: TransactionRow): Transaction {
@@ -63,6 +80,10 @@ export interface DataResult {
   error: string | null;
 }
 
+/**
+ * Dompet aktif saja yang masuk ke `dompet`, total saldo, dan dropdown.
+ * Nama dompet arsip tetap dipakai untuk riwayat transaksi lama.
+ */
 export async function fetchDashboardData(range?: { start?: string; end?: string }): Promise<DataResult> {
   try {
     const [walletsRes, txRes] = await Promise.all([
@@ -76,8 +97,10 @@ export async function fetchDashboardData(range?: { start?: string; end?: string 
     if (walletsRes.error) throw walletsRes.error;
     if (txRes.error) throw txRes.error;
 
-    const wallets: Wallet[] = (walletsRes.data ?? []).map(walletFromRow);
-    const walletName = new Map(wallets.map((w) => [w.id, w.nama]));
+    const rows = (walletsRes.data ?? []) as WalletRow[];
+    const walletName = new Map(rows.map((r) => [r.id, r.nama]));
+    const wallets: Wallet[] = rows.filter((r) => !r.is_archived).map(walletFromRow);
+
     const allTx: Transaction[] = (txRes.data ?? [])
       .map(transactionFromRow)
       .map((t) => ({ ...t, dompet: walletName.get(t.walletId ?? '') ?? 'Tanpa Dompet' }));
@@ -297,6 +320,40 @@ export interface WalletInput {
   nama: string;
   provider: string;
   saldo: number;
+  jenis?: Wallet['jenis'];
+  logo_url?: string | null;
+}
+
+/** Dompet arsip: sisa saldo dan riwayatnya tetap tersimpan. */
+export interface ArchivedWallet extends Wallet {
+  archivedAt: string | null;
+}
+
+/** Hasil pencarian nama dompet, termasuk yang sudah diarsip. */
+export interface WalletNameMatch {
+  id: string;
+  nama: string;
+  saldo: number;
+  isArchived: boolean;
+  createdAt: string | null;
+}
+
+/** Unggah logo dompet ke bucket publik. Hanya untuk pengguna yang sudah masuk. */
+export async function uploadWalletLogo(file: File): Promise<{ url: string | null; error: string | null }> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return { url: null, error: 'Sesi tidak ditemukan. Masuk ulang.' };
+
+  const safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-_]+/g, '-');
+  const path = `${userId}/${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage.from('wallet-logos').upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) return { url: null, error: error.message };
+
+  const { data } = supabase.storage.from('wallet-logos').getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
 }
 
 export async function insertWallet(input: WalletInput): Promise<WriteResult> {
@@ -307,6 +364,70 @@ export async function insertWallet(input: WalletInput): Promise<WriteResult> {
 
 export async function updateWalletRow(id: string, input: WalletInput): Promise<WriteResult> {
   const { error } = await supabase.from('wallets').update(input).eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Cari dompet dengan nama yang sama (tanpa membedakan huruf besar kecil), aktif maupun arsip. */
+export async function findWalletsByName(
+  nama: string,
+): Promise<{ matches: WalletNameMatch[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('wallets')
+    .select('id, nama, saldo, is_archived, created_at')
+    .ilike('nama', escapeLike(nama.trim()));
+  if (error) return { matches: [], error: error.message };
+  const matches = ((data ?? []) as WalletRow[]).map((r) => ({
+    id: r.id,
+    nama: r.nama,
+    saldo: toNumber(r.saldo),
+    isArchived: Boolean(r.is_archived),
+    createdAt: r.created_at ?? null,
+  }));
+  return { matches, error: null };
+}
+
+/** Daftar dompet diarsip, yang terbaru diarsip di atas. */
+export async function fetchArchivedWallets(): Promise<{ wallets: ArchivedWallet[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('wallets')
+    .select('*')
+    .eq('is_archived', true)
+    .order('archived_at', { ascending: false });
+  if (error) return { wallets: [], error: error.message };
+  const wallets = ((data ?? []) as WalletRow[]).map((r) => ({
+    ...walletFromRow(r),
+    archivedAt: r.archived_at ?? null,
+  }));
+  return { wallets, error: null };
+}
+
+/** Arsipkan dompet. Saldonya tetap tersimpan dan dompet tidak bisa dipakai untuk transaksi baru. */
+export async function archiveWalletRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase
+    .from('wallets')
+    .update({ is_archived: true, archived_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Pulihkan dompet arsip. Extra bisa dipakai untuk mengganti provider atau logo saat dipulihkan. */
+export async function restoreWalletRow(
+  id: string,
+  extra?: { provider?: string; jenis?: Wallet['jenis']; logo_url?: string | null },
+): Promise<WriteResult> {
+  const { error } = await supabase
+    .from('wallets')
+    .update({ is_archived: false, archived_at: null, ...extra })
+    .eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Ganti nama dompet (dipakai saat dompet arsip perlu diberi nama baru). */
+export async function renameWalletRow(id: string, nama: string): Promise<WriteResult> {
+  const { error } = await supabase.from('wallets').update({ nama }).eq('id', id);
   if (error) return { success: false, error: error.message };
   return { success: true, error: null };
 }
