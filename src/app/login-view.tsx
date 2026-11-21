@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from 'react';
+import { forwardRef, useState, type ComponentProps } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -297,30 +297,26 @@ function Field({
 const inputBase =
   'h-12 w-full rounded-2xl border bg-white pl-11 pr-4 text-sm text-[#0f1a3a] placeholder:text-[#8a97b5] outline-none transition focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/15';
 
-function FieldInput({
-  icon,
-  invalid,
-  className,
-  ...rest
-}: ComponentProps<'input'> & { icon: React.ReactNode; invalid: boolean }) {
-  return (
-    <div className="relative">
-      <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[#5b6f99]">{icon}</span>
-      <input
-        {...rest}
-        aria-invalid={invalid}
-        className={`${inputBase} ${invalid ? 'border-red-400' : 'border-[#dbe3f5]'} ${className ?? ''}`}
-      />
-    </div>
-  );
-}
+const FieldInput = forwardRef<HTMLInputElement, ComponentProps<'input'> & { icon: React.ReactNode; invalid: boolean }>(
+  function FieldInput({ icon, invalid, className, ...rest }, ref) {
+    return (
+      <div className="relative">
+        <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[#5b6f99]">{icon}</span>
+        <input
+          {...rest}
+          ref={ref}
+          aria-invalid={invalid}
+          className={`${inputBase} ${invalid ? 'border-red-400' : 'border-[#dbe3f5]'} ${className ?? ''}`}
+        />
+      </div>
+    );
+  },
+);
 
-function PasswordInput({
-  visible,
-  onToggle,
-  invalid,
-  ...rest
-}: ComponentProps<'input'> & { visible: boolean; onToggle: () => void; invalid: boolean }) {
+const PasswordInput = forwardRef<
+  HTMLInputElement,
+  ComponentProps<'input'> & { visible: boolean; onToggle: () => void; invalid: boolean }
+>(function PasswordInput({ visible, onToggle, invalid, ...rest }, ref) {
   return (
     <div className="relative">
       <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-[#5b6f99]">
@@ -328,6 +324,7 @@ function PasswordInput({
       </span>
       <input
         {...rest}
+        ref={ref}
         type={visible ? 'text' : 'password'}
         aria-invalid={invalid}
         className={`${inputBase} pr-11 ${invalid ? 'border-red-400' : 'border-[#dbe3f5]'}`}
@@ -342,7 +339,7 @@ function PasswordInput({
       </button>
     </div>
   );
-}
+});
 
 function SubmitButton({
   busy,
