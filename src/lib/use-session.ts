@@ -5,6 +5,8 @@ import { supabase } from './supabase-client';
 export function useSession() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  // Diset saat pengguna datang dari tautan reset password (event PASSWORD_RECOVERY).
+  const [recovery, setRecovery] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -15,8 +17,9 @@ export function useSession() {
       setLoading(false);
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, next) => {
       if (!active) return;
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
       setSession(next);
       setLoading(false);
     });
@@ -27,5 +30,5 @@ export function useSession() {
     };
   }, []);
 
-  return { session, loading };
+  return { session, loading, recovery, clearRecovery: () => setRecovery(false) };
 }
