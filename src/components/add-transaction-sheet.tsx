@@ -32,11 +32,13 @@ interface Props {
   onSubmitted: () => void;
   /** Pre-select a tab when opening. */
   initialTab?: SheetTab;
+  /** Form khusus satu jenis: tab Jenis disembunyikan, jenis mengikuti initialTab. */
+  lockTab?: boolean;
   /** When set, the sheet edits this transaction instead of creating one. */
   editing?: Transaction | null;
 }
 
-interface TxActions {
+export interface TxActions {
   addTransaction: (input: {
     tanggal: string;
     deskripsi: string;
@@ -74,6 +76,7 @@ export function AddTransactionSheet({
   wallets,
   onSubmitted,
   initialTab = 'Pemasukan',
+  lockTab = false,
   editing = null,
   addTransaction,
   editTransaction,
@@ -200,10 +203,10 @@ export function AddTransactionSheet({
             </span>
             <div>
               <SheetTitle className="font-display text-xl font-extrabold tracking-[-0.04em] text-foreground">
-                {editing ? 'Edit Transaksi' : 'Tambah Transaksi'}
+                {editing ? 'Edit Transaksi' : lockTab ? `Catat ${initialTab}` : 'Tambah Transaksi'}
               </SheetTitle>
               <SheetDescription className="mt-1 text-xs font-semibold text-muted-foreground">
-                {editing ? 'Ubah detail transaksi — saldo dompet ikut disesuaikan otomatis.' : 'Catat pemasukan, pengeluaran, atau transfer antar-dompet.'}
+                {editing ? 'Ubah detail transaksi — saldo dompet ikut disesuaikan otomatis.' : lockTab ? 'Saldo dompet diperbarui otomatis setelah disimpan.' : 'Catat pemasukan, pengeluaran, atau transfer antar-dompet.'}
               </SheetDescription>
             </div>
           </div>
@@ -211,7 +214,7 @@ export function AddTransactionSheet({
 
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
           <div className="flex-1 space-y-5 px-6 py-6">
-            {!editing && (
+            {!editing && !lockTab && (
               <div>
                 <Label className="mb-2 block text-sm font-extrabold text-foreground">Jenis</Label>
                 <div className="grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1">

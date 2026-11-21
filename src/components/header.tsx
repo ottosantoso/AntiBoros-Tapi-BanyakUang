@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, LayoutDashboard, List, LogOut, Plus, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, LayoutDashboard, List, LogOut, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Logo } from '@/components/logo';
@@ -19,7 +19,6 @@ export function Header({
   txSection,
   onNavigate,
   onRefresh,
-  onAdd,
   onDateRangeChange,
   dateRange,
   status,
@@ -34,7 +33,6 @@ export function Header({
   txSection: TransactionSection;
   onNavigate: (v: View, section?: TransactionSection) => void;
   onRefresh: () => void;
-  onAdd: () => void;
   onDateRangeChange: (r: DateRangeValue) => void;
   dateRange: DateRangeValue;
   status: 'idle' | 'loading' | 'connected' | 'error';
@@ -80,11 +78,6 @@ export function Header({
         <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing} className="h-10 gap-2 rounded-full border-border bg-card px-3.5 font-bold text-foreground hover:bg-accent hover:bg-accent/40 hover:text-accent-foreground">
           <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
           <span className="hidden sm:inline">Muat Ulang</span>
-        </Button>
-
-        <Button onClick={onAdd} size="sm" className="h-10 gap-2 rounded-full bg-primary px-4 font-bold text-primary-foreground shadow-[0_8px_20px_rgba(59,130,246,0.35)] hover:bg-primary/90">
-          <Plus className="h-4 w-4" strokeWidth={2.6} />
-          <span className="hidden sm:inline">Tambah</span>
         </Button>
 
         <ThemeToggle className="h-10 w-10 rounded-full border-border bg-card text-foreground" />
