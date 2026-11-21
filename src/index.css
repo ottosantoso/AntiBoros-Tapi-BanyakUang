@@ -82,36 +82,36 @@
     --sidebar-border: 214 45% 91%;
   }
 
-  /* Dark — premium fintech dark (deep navy, not pure black) */
+  /* Dark — deep navy fintech (#0B0F19 base, #111827 surfaces, electric blue) */
   .dark {
     --background: 222 47% 7%;
-    --background-elevated: 222 44% 11%;
+    --background-elevated: 221 39% 13%;
     --foreground: 210 40% 96%;
 
-    --card: 222 44% 11%;
+    --card: 220 39% 11%;
     --card-foreground: 210 40% 96%;
 
-    --popover: 222 44% 13%;
+    --popover: 221 39% 13%;
     --popover-foreground: 210 40% 96%;
 
-    --primary: 217 91% 62%;
+    --primary: 213 94% 60%;
     --primary-foreground: 222 47% 7%;
 
     --secondary: 222 40% 16%;
     --secondary-foreground: 210 40% 96%;
 
-    --muted: 222 36% 18%;
+    --muted: 222 36% 17%;
     --muted-foreground: 217 19% 63%;
 
-    --accent: 222 40% 16%;
+    --accent: 217 91% 60% / 0.14;
     --accent-foreground: 210 40% 96%;
 
     --destructive: 0 72% 56%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 222 30% 20%;
-    --input: 222 30% 20%;
-    --ring: 217 91% 62%;
+    --border: 222 30% 19%;
+    --input: 222 30% 19%;
+    --ring: 213 94% 60%;
 
     --income: 152 63% 52%;
     --income-soft: 152 63% 52% / 0.16;
@@ -140,9 +140,9 @@
     --chart-7: 330 81% 64%;
     --chart-8: 174 72% 48%;
 
-    --sidebar: 222 47% 9%;
+    --sidebar: 221 43% 9%;
     --sidebar-foreground: 210 40% 96%;
-    --sidebar-border: 222 30% 18%;
+    --sidebar-border: 222 30% 17%;
   }
 
   * {

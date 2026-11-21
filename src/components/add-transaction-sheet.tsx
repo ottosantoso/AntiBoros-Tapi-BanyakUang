@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, CheckCircle2, CircleAlert, Loader2, PlusCircle, Send, Tags, WalletCards } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowLeftRight,
+  ArrowUpRight,
+  CalendarDays,
+  CheckCircle2,
+  CircleAlert,
+  Loader2,
+  PlusCircle,
+  Repeat,
+  Send,
+  Tags,
+  WalletCards,
+} from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,99 +21,378 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { toISODate, formatIDR } from '@/lib/format';
-import { addTransaction, hasApiUrl } from '@/lib/api';
-import type { TransactionType, Wallet } from '@/lib/types';
+import type { Transaction, TransactionType, Wallet } from '@/lib/types';
+
+export type SheetTab = TransactionType | 'Transfer';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   wallets: Wallet[];
   onSubmitted: () => void;
+  /** Pre-select a tab when opening. */
+  initialTab?: SheetTab;
+  /** When set, the sheet edits this transaction instead of creating one. */
+  editing?: Transaction | null;
 }
 
-export function AddTransactionSheet({ open, onOpenChange, wallets, onSubmitted }: Props) {
+interface TxActions {
+  addTransaction: (input: {
+    tanggal: string;
+    deskripsi: string;
+    tipe: TransactionType;
+    nominal: number;
+    walletId: string;
+    kategori?: string;
+    berulang?: boolean;
+  }) => Promise<{ success: boolean; error: string | null }>;
+  editTransaction: (
+    id: string,
+    input: {
+      tanggal?: string;
+      deskripsi?: string;
+      tipe?: TransactionType;
+      nominal?: number;
+      walletId?: string;
+      kategori?: string;
+      berulang?: boolean;
+    },
+  ) => Promise<{ success: boolean; error: string | null }>;
+  addTransfer: (input: {
+    tanggal: string;
+    fromWalletId: string;
+    toWalletId: string;
+    nominal: number;
+    biayaAdmin?: number;
+    catatan?: string;
+  }) => Promise<{ success: boolean; error: string | null }>;
+}
+
+export function AddTransactionSheet({
+  open,
+  onOpenChange,
+  wallets,
+  onSubmitted,
+  initialTab = 'Pemasukan',
+  editing = null,
+  addTransaction,
+  editTransaction,
+  addTransfer,
+}: Props & TxActions) {
+  const [tab, setTab] = useState<SheetTab>(initialTab);
   const [tanggal, setTanggal] = useState(toISODate());
   const [deskripsi, setDeskripsi] = useState('');
-  const [tipe, setTipe] = useState<TransactionType>('Pemasukan');
   const [nominal, setNominal] = useState('');
-  const [dompet, setDompet] = useState(wallets[0]?.nama ?? '');
+  const [dompet, setDompet] = useState('');
+  const [berulang, setBerulang] = useState(false);
+
+  // Transfer state
+  const [fromWallet, setFromWallet] = useState('');
+  const [toWallet, setToWallet] = useState('');
+  const [biayaAdmin, setBiayaAdmin] = useState('');
+  const [catatan, setCatatan] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (open && wallets.length && !wallets.some((wallet) => wallet.nama === dompet)) setDompet(wallets[0].nama);
+    if (!open) return;
+    if (editing) {
+      setTab(editing.tipe);
+      setTanggal(editing.tanggal);
+      setDeskripsi(editing.deskripsi);
+      setNominal(String(editing.nominal));
+      setDompet(editing.walletId ?? wallets[0]?.id ?? '');
+      setBerulang(editing.berulang ?? false);
+    } else {
+      setTab(initialTab);
+      setTanggal(toISODate());
+      setDeskripsi('');
+      setNominal('');
+      setBerulang(false);
+      setDompet(wallets[0]?.id ?? '');
+      setFromWallet(wallets[0]?.id ?? '');
+      setToWallet(wallets[1]?.id ?? '');
+      setBiayaAdmin('');
+      setCatatan('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, initialTab]);
+
+  useEffect(() => {
+    if (open && wallets.length && !wallets.some((w) => w.id === dompet)) setDompet(wallets[0].id);
   }, [dompet, open, wallets]);
 
-  function reset() {
-    setTanggal(toISODate());
-    setDeskripsi('');
-    setTipe('Pemasukan');
-    setNominal('');
-    setDompet(wallets[0]?.nama ?? '');
-  }
-
   const numeric = Number(nominal.replace(/[^0-9]/g, '')) || 0;
-  const selectedWallet = useMemo(() => wallets.find((wallet) => wallet.nama === dompet), [dompet, wallets]);
-  const insufficientBalance = tipe === 'Pengeluaran' && Boolean(selectedWallet) && numeric > (selectedWallet?.saldo ?? 0);
-  const category = guessCategory(deskripsi, tipe);
-  const valid = deskripsi.trim().length > 0 && numeric > 0 && dompet.length > 0 && !insufficientBalance;
+  const adminNumeric = Number(biayaAdmin.replace(/[^0-9]/g, '')) || 0;
+  const selectedWallet = useMemo(() => wallets.find((w) => w.id === dompet), [dompet, wallets]);
+  const fromSelected = useMemo(() => wallets.find((w) => w.id === fromWallet), [fromWallet, wallets]);
+  const isTransfer = tab === 'Transfer';
+
+  const insufficientBalance =
+    tab === 'Pengeluaran' && Boolean(selectedWallet) && numeric > (selectedWallet?.saldo ?? 0);
+  const invalidTransfer =
+    isTransfer &&
+    (!fromWallet || !toWallet || fromWallet === toWallet || numeric <= 0 || numeric + adminNumeric > (fromSelected?.saldo ?? 0));
+
+  const category = isTransfer ? 'Transfer' : guessCategory(deskripsi, tab);
+  const valid = editing
+    ? numeric > 0 && dompet.length > 0 && !insufficientBalance
+    : isTransfer
+      ? !invalidTransfer
+      : deskripsi.trim().length > 0 && numeric > 0 && dompet.length > 0 && !insufficientBalance;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!valid || submitting) return;
     setSubmitting(true);
-    const payload = { action: 'addTransaction' as const, tanggal, deskripsi: deskripsi.trim(), tipe, nominal: numeric, dompet, kategori: category };
-    const result = await addTransaction(payload);
+    let result: { success: boolean; error: string | null };
+    if (editing) {
+      result = await editTransaction(editing.id!, {
+        tanggal,
+        deskripsi: deskripsi.trim(),
+        tipe: tab as TransactionType,
+        nominal: numeric,
+        walletId: dompet,
+        kategori: category,
+        berulang,
+      });
+    } else if (isTransfer) {
+      result = await addTransfer({
+        tanggal,
+        fromWalletId: fromWallet,
+        toWalletId: toWallet,
+        nominal: numeric,
+        biayaAdmin: adminNumeric,
+        catatan: catatan.trim() || undefined,
+      });
+    } else {
+      result = await addTransaction({
+        tanggal,
+        deskripsi: deskripsi.trim(),
+        tipe: tab as TransactionType,
+        nominal: numeric,
+        walletId: dompet,
+        kategori: category,
+        berulang,
+      });
+    }
     setSubmitting(false);
     if (result.success) {
-      toast.success('Transaksi tersimpan', { description: `${tipe} ${formatIDR(numeric)} — ${deskripsi.trim()}` });
-      reset();
+      toast.success(editing ? 'Transaksi diperbarui' : 'Transaksi tersimpan', {
+        description: isTransfer && !editing
+          ? `Transfer ${formatIDR(numeric)} — saldo dompet sudah diperbarui`
+          : `${editing ? tab : tab} ${formatIDR(numeric)}${isTransfer && adminNumeric > 0 ? ' (plus biaya admin)' : ''}`,
+      });
       onOpenChange(false);
       onSubmitted();
     } else {
-      toast.error('Gagal menyimpan', { description: result.error ?? 'Periksa koneksi data Anda.' });
+      toast.error('Gagal menyimpan', { description: result.error ?? 'Periksa koneksi database Anda.' });
     }
   }
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 border-[#dbeafe] bg-[#f8fbff] p-0 shadow-[-14px_0_35px_rgba(30,64,175,0.08)] sm:max-w-[410px]">
-        <SheetHeader className="border-b border-[#e7eef9] bg-white px-6 py-5 text-left">
+      <SheetContent side="right" className="w-full gap-0 border-border bg-popover p-0 shadow-[-14px_0_35px_rgba(0,0,0,0.45)] sm:max-w-[440px]">
+        <SheetHeader className="border-b border-border bg-card px-6 py-5 text-left">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#2563eb] text-white shadow-[0_7px_16px_rgba(37,99,235,0.24)]"><PlusCircle className="h-6 w-6" strokeWidth={2.2} /></span>
-            <div><SheetTitle className="font-display text-xl font-extrabold tracking-[-0.04em] text-[#172554]">Tambah Transaksi</SheetTitle><SheetDescription className="mt-1 text-xs font-semibold text-[#5b6f99]">Catat pemasukan atau pengeluaran baru.</SheetDescription></div>
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_0_18px_rgba(59,130,246,0.4)]">
+              <PlusCircle className="h-6 w-6" strokeWidth={2.2} />
+            </span>
+            <div>
+              <SheetTitle className="font-display text-xl font-extrabold tracking-[-0.04em] text-foreground">
+                {editing ? 'Edit Transaksi' : 'Tambah Transaksi'}
+              </SheetTitle>
+              <SheetDescription className="mt-1 text-xs font-semibold text-muted-foreground">
+                {editing ? 'Ubah detail transaksi — saldo dompet ikut disesuaikan otomatis.' : 'Catat pemasukan, pengeluaran, atau transfer antar-dompet.'}
+              </SheetDescription>
+            </div>
           </div>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
           <div className="flex-1 space-y-5 px-6 py-6">
-            <div>
-              <Label className="mb-2 block text-sm font-extrabold text-[#172554]">Jenis</Label>
-              <div className="grid grid-cols-2 gap-1 rounded-2xl bg-[#eef3fb] p-1">
-                <button type="button" onClick={() => setTipe('Pemasukan')} className={cn('flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-extrabold transition-all', tipe === 'Pemasukan' ? 'bg-[#2563eb] text-white shadow-[0_5px_12px_rgba(37,99,235,0.2)]' : 'text-[#e11d48] hover:bg-white')}><ArrowUpRight className="h-4 w-4" /> Pemasukan</button>
-                <button type="button" onClick={() => setTipe('Pengeluaran')} className={cn('flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-extrabold transition-all', tipe === 'Pengeluaran' ? 'bg-[#f43f5e] text-white shadow-[0_5px_12px_rgba(244,63,94,0.18)]' : 'text-[#be123c] hover:bg-white')}><ArrowDownLeft className="h-4 w-4" /> Pengeluaran</button>
+            {!editing && (
+              <div>
+                <Label className="mb-2 block text-sm font-extrabold text-foreground">Jenis</Label>
+                <div className="grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1">
+                  <TabButton active={tab === 'Pemasukan'} onClick={() => setTab('Pemasukan')} activeClass="bg-emerald-500 text-white shadow-[0_5px_12px_rgba(16,185,129,0.3)]">
+                    <ArrowUpRight className="h-4 w-4" /> Pemasukan
+                  </TabButton>
+                  <TabButton active={tab === 'Pengeluaran'} onClick={() => setTab('Pengeluaran')} activeClass="bg-rose-500 text-white shadow-[0_5px_12px_rgba(244,63,94,0.3)]">
+                    <ArrowDownLeft className="h-4 w-4" /> Pengeluaran
+                  </TabButton>
+                  <TabButton active={tab === 'Transfer'} onClick={() => setTab('Transfer')} activeClass="bg-violet-500 text-white shadow-[0_5px_12px_rgba(139,92,246,0.3)]">
+                    <ArrowLeftRight className="h-4 w-4" /> Transfer
+                  </TabButton>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="tx-date" className="text-sm font-extrabold text-foreground">Tanggal</Label>
+              <div className="relative">
+                <CalendarDays className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" />
+                <Input id="tx-date" type="date" value={tanggal} onChange={(e) => setTanggal(e.target.value)} className="h-11 rounded-xl border-border bg-card pl-10 font-bold text-foreground" required />
               </div>
             </div>
 
-            <div className="space-y-2"><Label htmlFor="tx-date" className="text-sm font-extrabold text-[#172554]">Tanggal</Label><div className="relative"><CalendarDays className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#2563eb]" /><Input id="tx-date" type="date" value={tanggal} onChange={(event) => setTanggal(event.target.value)} className="h-11 rounded-xl border-[#dbeafe] bg-white pl-10 font-bold text-[#172554]" required /></div></div>
+            {isTransfer ? (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-sm font-extrabold text-foreground">Dari dompet</Label>
+                  <Select value={fromWallet} onValueChange={setFromWallet}>
+                    <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
+                      <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" /><SelectValue placeholder="Pilih dompet asal" /></div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wallets.map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {fromSelected && (
+                    <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                      <span className="font-semibold text-muted-foreground">Saldo dompet asal</span>
+                      <span className={cn('font-extrabold tnum', fromSelected.saldo >= 0 ? 'text-emerald-300' : 'text-rose-300')}>{formatIDR(fromSelected.saldo)}</span>
+                    </div>
+                  )}
+                </div>
 
-            <div className="space-y-2"><Label htmlFor="tx-desc" className="text-sm font-extrabold text-[#172554]">Deskripsi</Label><Input id="tx-desc" placeholder="cth. Belanja bulanan, Gaji, Kopi..." value={deskripsi} onChange={(event) => setDeskripsi(event.target.value)} maxLength={80} className="h-11 rounded-xl border-[#dbeafe] bg-white font-medium text-[#172554] placeholder:text-[#8a9abb]" required /><div className="flex items-center gap-2 rounded-xl bg-[#eff6ff] px-3 py-2 text-xs font-bold text-[#31548a]"><Tags className="h-3.5 w-3.5 text-[#2563eb]" />Kategori otomatis: <span className="text-[#2563eb]">{category}</span></div></div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-extrabold text-foreground">Ke dompet</Label>
+                  <Select value={toWallet} onValueChange={setToWallet}>
+                    <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
+                      <div className="flex items-center gap-2"><Send className="h-4 w-4 text-violet-300" /><SelectValue placeholder="Pilih dompet tujuan" /></div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wallets.filter((w) => w.id !== fromWallet).map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2"><Label htmlFor="tx-nominal" className="text-sm font-extrabold text-[#172554]">Nominal (Rp)</Label><div className="relative"><span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-[#5b6f99]">Rp</span><Input id="tx-nominal" inputMode="numeric" placeholder="0" value={nominal ? new Intl.NumberFormat('id-ID').format(numeric) : ''} onChange={(event) => setNominal(event.target.value.replace(/[^0-9]/g, ''))} className="h-11 rounded-xl border-[#dbeafe] bg-white pl-10 font-bold tnum text-[#172554]" required /></div>{numeric > 0 && <p className="text-xs font-bold text-[#5b6f99] tnum">{formatIDR(numeric)}</p>}</div>
+                <div className="space-y-2">
+                  <Label htmlFor="tx-nominal-tf" className="text-sm font-extrabold text-foreground">Nominal (Rp)</Label>
+                  <NumberInput id="tx-nominal-tf" value={nominal} numeric={numeric} onChange={setNominal} />
+                </div>
 
-            <div className="space-y-2"><Label className="text-sm font-extrabold text-[#172554]">Dompet sumber dana</Label><Select value={dompet} onValueChange={setDompet}><SelectTrigger className="h-11 rounded-xl border-[#dbeafe] bg-white font-bold text-[#172554]"><div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-[#2563eb]" /><SelectValue placeholder="Pilih dompet" /></div></SelectTrigger><SelectContent>{wallets.length === 0 ? <SelectItem value="_none" disabled>Belum ada dompet</SelectItem> : wallets.map((wallet) => <SelectItem key={wallet.nama} value={wallet.nama}>{wallet.nama}</SelectItem>)}</SelectContent></Select>{selectedWallet && <div className="flex items-center justify-between rounded-xl border border-[#dbeafe] bg-white px-3 py-2 text-xs"><span className="font-semibold text-[#5b6f99]">Saldo tersedia</span><span className={cn('font-extrabold tnum', selectedWallet.saldo >= 0 ? 'text-[#047857]' : 'text-[#be123c]')}>{formatIDR(selectedWallet.saldo)}</span></div>}</div>
+                <div className="space-y-2">
+                  <Label htmlFor="tx-admin" className="text-sm font-extrabold text-foreground">Biaya admin (opsional)</Label>
+                  <NumberInput id="tx-admin" value={biayaAdmin} numeric={adminNumeric} onChange={setBiayaAdmin} />
+                  <p className="text-[11px] font-semibold text-muted-foreground">
+                    Biaya admin otomatis tercatat sebagai pengeluaran kategori "Biaya Admin".
+                  </p>
+                </div>
 
-            {insufficientBalance && <div className="flex gap-2 rounded-xl border border-[#fda4af] bg-[#fff1f2] px-3 py-2.5 text-xs font-bold leading-relaxed text-[#be123c]"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />Nominal pengeluaran melebihi saldo dompet yang dipilih.</div>}
-            {!hasApiUrl() && <div className="flex gap-2 rounded-xl border border-[#fcd34d] bg-[#fffbeb] px-3 py-2.5 text-xs font-bold leading-relaxed text-[#b45309]"><CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />Koneksi Apps Script belum diatur. Hubungkan melalui Pengaturan sebelum menyimpan.</div>}
+                <div className="space-y-2">
+                  <Label htmlFor="tx-note" className="text-sm font-extrabold text-foreground">Catatan (opsional)</Label>
+                  <Input id="tx-note" placeholder="cth. Pindahkan tabungan" value={catatan} onChange={(e) => setCatatan(e.target.value)} maxLength={80} className="h-11 rounded-xl border-border bg-card font-medium text-foreground placeholder:text-muted-foreground" />
+                </div>
+
+                {fromWallet === toWallet && fromWallet && (
+                  <WarningBox>Dompet asal dan tujuan tidak boleh sama.</WarningBox>
+                )}
+                {fromSelected && numeric + adminNumeric > fromSelected.saldo && (
+                  <WarningBox>Nominal + biaya admin melebihi saldo dompet asal ({formatIDR(fromSelected.saldo)}).</WarningBox>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="tx-desc" className="text-sm font-extrabold text-foreground">Deskripsi</Label>
+                  <Input id="tx-desc" placeholder="cth. Belanja bulanan, Gaji, Kopi..." value={deskripsi} onChange={(e) => setDeskripsi(e.target.value)} maxLength={80} className="h-11 rounded-xl border-border bg-card font-medium text-foreground placeholder:text-muted-foreground" required />
+                  <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs font-bold text-primary">
+                    <Tags className="h-3.5 w-3.5" />Kategori otomatis: <span>{category}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="tx-nominal" className="text-sm font-extrabold text-foreground">Nominal (Rp)</Label>
+                  <NumberInput id="tx-nominal" value={nominal} numeric={numeric} onChange={setNominal} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-extrabold text-foreground">{tab === 'Pemasukan' ? 'Dompet tujuan dana' : 'Dompet sumber dana'}</Label>
+                  <Select value={dompet} onValueChange={setDompet}>
+                    <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
+                      <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" /><SelectValue placeholder="Pilih dompet" /></div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wallets.length === 0 ? <SelectItem value="_none" disabled>Belum ada dompet</SelectItem> : wallets.map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {selectedWallet && (
+                    <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                      <span className="font-semibold text-muted-foreground">Saldo tersedia</span>
+                      <span className={cn('font-extrabold tnum', selectedWallet.saldo >= 0 ? 'text-emerald-300' : 'text-rose-300')}>{formatIDR(selectedWallet.saldo)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-3 py-3">
+                  <input type="checkbox" checked={berulang} onChange={(e) => setBerulang(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
+                  <span className="flex items-center gap-2 text-xs font-bold text-foreground">
+                    <Repeat className="h-4 w-4 text-primary" /> Transaksi berulang (gaji, tagihan, cicilan)
+                  </span>
+                </label>
+
+                {insufficientBalance && <WarningBox>Nominal pengeluaran melebihi saldo dompet yang dipilih.</WarningBox>}
+              </>
+            )}
           </div>
 
-          <SheetFooter className="border-t border-[#e7eef9] bg-white px-6 py-4"><Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting} className="h-11 rounded-xl border-[#dbeafe] bg-[#f1f5fb] font-extrabold text-[#172554] hover:bg-[#e0f2fe]">Batal</Button><Button type="submit" disabled={!valid || submitting} className="h-11 gap-2 rounded-xl bg-[#2563eb] font-extrabold text-white shadow-[0_7px_15px_rgba(37,99,235,0.2)] hover:bg-[#1d4ed8]">{submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...</> : <><CheckCircle2 className="h-4 w-4" /> Simpan</>}</Button></SheetFooter>
+          <SheetFooter className="border-t border-border bg-card px-6 py-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting} className="h-11 rounded-xl border-border bg-muted font-extrabold text-foreground hover:bg-accent/40">
+              Batal
+            </Button>
+            <Button type="submit" disabled={!valid || submitting} className="h-11 gap-2 rounded-xl bg-primary font-extrabold text-primary-foreground shadow-[0_7px_15px_rgba(59,130,246,0.3)] hover:bg-primary/90">
+              {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Menyimpan...</> : <><CheckCircle2 className="h-4 w-4" /> Simpan</>}
+            </Button>
+          </SheetFooter>
         </form>
       </SheetContent>
     </Sheet>
   );
 }
 
-function guessCategory(description: string, type: TransactionType): string {
+function TabButton({ active, onClick, activeClass, children }: { active: boolean; onClick: () => void; activeClass: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-[13px] font-extrabold transition-all',
+        active ? activeClass : 'text-muted-foreground hover:bg-card hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function NumberInput({ id, value, numeric, onChange }: { id: string; value: string; numeric: number; onChange: (v: string) => void }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-extrabold text-muted-foreground">Rp</span>
+      <Input
+        id={id}
+        inputMode="numeric"
+        placeholder="0"
+        value={value ? new Intl.NumberFormat('id-ID').format(numeric) : ''}
+        onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ''))}
+        className="h-11 rounded-xl border-border bg-card pl-10 font-bold tnum text-foreground"
+        required
+      />
+    </div>
+  );
+}
+
+function WarningBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2 rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2.5 text-xs font-bold leading-relaxed text-rose-300">
+      <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{children}
+    </div>
+  );
+}
+
+export function guessCategory(description: string, type: TransactionType): string {
   if (type === 'Pemasukan') {
     const value = description.toLowerCase();
     if (value.includes('gaji')) return 'Gaji';

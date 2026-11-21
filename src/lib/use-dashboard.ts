@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { DashboardData, Wallet } from './types';
+import type { DashboardData, Wallet, WalletTransfer } from './types';
 import {
   fetchDashboardData,
+  fetchTransfers,
   insertTransaction,
   insertTransactions,
+  insertTransfer,
   insertWallet,
+  updateTransactionRow,
+  deleteTransactionRow,
+  deleteTransactionsBulk,
+  deleteTransferRow,
   updateWalletRow,
   deleteWalletRow,
   countTransactionsForWallet,
   type NewTransactionInput,
+  type UpdateTransactionInput,
   type WalletInput,
 } from './data';
 
@@ -16,6 +23,7 @@ type Status = 'idle' | 'loading' | 'connected' | 'error';
 
 interface DashboardState {
   data: DashboardData;
+  transfers: WalletTransfer[];
   status: Status;
   error: string | null;
 }
@@ -33,6 +41,7 @@ export function useDashboard(range: { from?: Date; to?: Date }) {
     },
     status: 'loading',
     error: null,
+    transfers: [],
   });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rangeRef = useRef(range);
@@ -46,16 +55,25 @@ export function useDashboard(range: { from?: Date; to?: Date }) {
   const load = useCallback(async (opts?: { silent?: boolean; currentRange?: typeof range }) => {
     const r = opts?.currentRange ?? rangeRef.current;
     if (!opts?.silent) setState((s) => ({ ...s, status: 'loading' }));
-    const result = await fetchDashboardData({ start: iso(r.from), end: iso(r.to) });
+    const [result, transferRes] = await Promise.all([
+      fetchDashboardData({ start: iso(r.from), end: iso(r.to) }),
+      fetchTransfers(),
+    ]);
     if (result.error) {
-      setState({ data: emptyData(), status: 'error', error: result.error });
+      setState((s) => ({ ...s, data: emptyData(), status: 'error', error: result.error }));
       return;
     }
     if (result.data) {
-      setState({ data: result.data, status: 'connected', error: null });
+      setState((s) => ({
+        ...s,
+        data: result.data!,
+        transfers: transferRes.error ? s.transfers : transferRes.transfers,
+        status: 'connected',
+        error: null,
+      }));
       return;
     }
-    setState({ data: emptyData(), status: 'idle', error: null });
+    setState((s) => ({ ...s, data: emptyData(), status: 'idle', error: null }));
   }, []);
 
   // Muat ulang saat rentang tanggal berubah.
@@ -102,6 +120,58 @@ export function useDashboard(range: { from?: Date; to?: Date }) {
     [],
   );
 
+  const editTransaction = useCallback(
+    async (id: string, input: UpdateTransactionInput) => {
+      const res = await updateTransactionRow(id, input);
+      if (res.success) load({ silent: true });
+      return res;
+    },
+    [load],
+  );
+
+  const removeTransaction = useCallback(
+    async (id: string) => {
+      const res = await deleteTransactionRow(id);
+      if (res.success) load({ silent: true });
+      return res;
+    },
+    [load],
+  );
+
+  const removeTransactionsBulk = useCallback(
+    async (ids: string[]) => {
+      const res = await deleteTransactionsBulk(ids);
+      if (res.success) load({ silent: true });
+      return res;
+    },
+    [load],
+  );
+
+  const addTransfer = useCallback(
+    async (input: {
+      tanggal: string;
+      fromWalletId: string;
+      toWalletId: string;
+      nominal: number;
+      biayaAdmin?: number;
+      catatan?: string;
+    }) => {
+      const res = await insertTransfer(input);
+      if (res.success) load({ silent: true });
+      return res;
+    },
+    [load],
+  );
+
+  const removeTransfer = useCallback(
+    async (id: string) => {
+      const res = await deleteTransferRow(id);
+      if (res.success) load({ silent: true });
+      return res;
+    },
+    [load],
+  );
+
   return {
     ...state,
     usingDemo: false,
@@ -111,6 +181,11 @@ export function useDashboard(range: { from?: Date; to?: Date }) {
     addWallet,
     editWallet,
     removeWallet,
+    editTransaction,
+    removeTransaction,
+    removeTransactionsBulk,
+    addTransfer,
+    removeTransfer,
   };
 }
 

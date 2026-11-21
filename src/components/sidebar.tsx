@@ -1,95 +1,216 @@
+import { useState } from 'react';
 import {
   ArrowLeftRight,
-  CheckCircle2,
+  ChevronDown,
   LayoutDashboard,
+  List,
   ScanLine,
   Settings,
-  Sparkles,
+  TrendingDown,
+  TrendingUp,
   Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
-import type { View } from '@/app/views';
+import type { View, TransactionSection } from '@/app/views';
+interface TxChild {
+  id: TransactionSection;
+  label: string;
+  icon: typeof List;
+  iconClass: string;
+  tileClass: string;
+}
 
-const NAV: { id: View; label: string; icon: typeof LayoutDashboard; hint: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, hint: 'Ringkasan keuangan' },
-  { id: 'wallets', label: 'Dompet', icon: Wallet, hint: 'Kelola saldo dompet' },
-  { id: 'transactions', label: 'Transaksi', icon: ArrowLeftRight, hint: 'Riwayat & tambah' },
-  { id: 'scanner', label: 'AI Scanner', icon: ScanLine, hint: 'Pindai struk & mutasi' },
-  { id: 'settings', label: 'Pengaturan', icon: Settings, hint: 'Koneksi API' },
+const TX_CHILDREN: TxChild[] = [
+  { id: 'all', label: 'Semua Transaksi', icon: List, iconClass: 'text-sky-300', tileClass: 'bg-sky-500/15' },
+  { id: 'income', label: 'Pemasukan', icon: TrendingUp, iconClass: 'text-emerald-400', tileClass: 'bg-emerald-500/15' },
+  { id: 'expense', label: 'Pengeluaran', icon: TrendingDown, iconClass: 'text-rose-400', tileClass: 'bg-rose-500/15' },
+  {
+    id: 'transfer',
+    label: 'Transfer Antar-Dompet',
+    icon: ArrowLeftRight,
+    iconClass: 'text-violet-300',
+    tileClass: 'bg-violet-500/15',
+  },
+];
+
+const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[] = [
+  { id: 'dashboard', label: 'Dashboard', hint: 'Ringkasan keuangan', icon: LayoutDashboard },
+  { id: 'wallets', label: 'Dompet', hint: 'Kelola sumber dana', icon: Wallet },
 ];
 
 export function Sidebar({
   view,
+  txSection,
   onNavigate,
   connected,
   usingDemo,
 }: {
   view: View;
-  onNavigate: (v: View) => void;
+  txSection: TransactionSection;
+  onNavigate: (v: View, section?: TransactionSection) => void;
   connected: boolean;
   usingDemo: boolean;
 }) {
+  const [txOpen, setTxOpen] = useState(true);
+  const txActive = view === 'transactions';
+
   return (
-    <aside className="hidden min-h-screen w-[252px] shrink-0 flex-col border-r border-[#dbeafe] bg-white lg:flex">
-      <div className="flex items-center gap-3 px-7 py-7">
-        <Logo size={46} />
+    <aside className="sticky top-0 z-20 flex h-screen w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      <div className="flex items-center gap-3 px-5 pt-6 pb-5">
+        <Logo size={40} />
         <div className="min-w-0">
-          <p className="font-display text-[16px] font-extrabold leading-tight tracking-[-0.03em] text-[#172554]">
+          <p className="truncate font-display text-[17px] font-extrabold leading-tight tracking-tight text-white">
             Hepeng History
           </p>
-          <p className="mt-0.5 text-xs font-medium text-[#5b6f99]">Personal Finance</p>
+          <p className="text-[11px] font-medium text-muted-foreground">Personal Finance Tracker</p>
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1.5 px-4">
-        <p className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#1e3a8a]">
-          Menu
-        </p>
-        {NAV.map((item) => {
-          const active = view === item.id;
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
+        {TOP_ITEMS.map((item) => (
+          <NavButton
+            key={item.id}
+            active={view === item.id}
+            onClick={() => onNavigate(item.id)}
+            icon={<item.icon className="h-[18px] w-[18px]" strokeWidth={2.2} />}
+            label={item.label}
+            hint={item.hint}
+          />
+        ))}
+
+        {/* Transaksi — accordion parent */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setTxOpen((o) => !o)}
+            aria-expanded={txOpen}
+            className={cn(
+              'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+              txActive ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            )}
+          >
+            <span
               className={cn(
-                'group relative flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-200',
-                active
-                  ? 'bg-[#e0f2fe] text-[#1d4ed8] shadow-[0_8px_20px_rgba(37,99,235,0.08)]'
-                  : 'text-[#172554] hover:bg-[#f4f8ff] hover:text-[#1d4ed8]',
+                'grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors',
+                txActive ? 'bg-primary text-primary-foreground shadow-[0_0_18px_rgba(59,130,246,0.45)]' : 'bg-white/5 text-muted-foreground group-hover:text-foreground',
               )}
             >
-              {active && <span className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-[#2563eb]" />}
-              <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-colors', active ? 'bg-[#bfdbfe] text-[#2563eb]' : 'bg-[#eff6ff] text-[#335b9e] group-hover:bg-[#dbeafe]')}>
-                <Icon className="h-[19px] w-[19px]" strokeWidth={2.2} />
+              <ArrowLeftRight className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className={cn('block truncate text-sm font-bold', txActive && 'text-primary')}>Transaksi</span>
+              <span className="block truncate text-[11px] font-medium text-muted-foreground">
+                Catatan pemasukan &amp; pengeluaran
               </span>
-              <span className="flex flex-col items-start leading-tight">
-                <span className="text-sm font-bold">{item.label}</span>
-                <span className={cn('mt-1 text-[11px] font-medium', active ? 'text-[#2563eb]/75' : 'text-[#6b7da4]')}>
-                  {item.hint}
-                </span>
-              </span>
-            </button>
-          );
-        })}
+            </span>
+            <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform duration-200', txOpen && 'rotate-180')} />
+          </button>
+
+          {txOpen && (
+            <div className="relative mt-1 ml-[26px] space-y-0.5 border-l border-sidebar-border pl-3">
+              {TX_CHILDREN.map((child) => {
+                const childActive = txActive && txSection === child.id;
+                return (
+                  <button
+                    key={child.id}
+                    type="button"
+                    onClick={() => onNavigate('transactions', child.id)}
+                    className={cn(
+                      'relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold transition-colors',
+                      childActive
+                        ? 'bg-primary/15 text-primary'
+                        : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                    )}
+                  >
+                    {childActive && (
+                      <span className="absolute -left-[13px] top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-primary" />
+                    )}
+                    <span className={cn('grid h-6 w-6 shrink-0 place-items-center rounded-md', child.tileClass)}>
+                      <child.icon className={cn('h-3.5 w-3.5', child.iconClass)} strokeWidth={2.4} />
+                    </span>
+                    <span className="truncate">{child.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <NavButton
+          active={view === 'scanner'}
+          onClick={() => onNavigate('scanner')}
+          icon={<ScanLine className="h-[18px] w-[18px]" strokeWidth={2.2} />}
+          label="AI Scanner"
+          hint="Pindai struk otomatis"
+        />
+        <NavButton
+          active={view === 'settings'}
+          onClick={() => onNavigate('settings')}
+          icon={<Settings className="h-[18px] w-[18px]" strokeWidth={2.2} />}
+          label="Pengaturan"
+          hint="Preferensi aplikasi"
+        />
       </nav>
 
-      <div className="px-4 pb-5">
-        <div className={cn('rounded-2xl border p-4', usingDemo ? 'border-[#fbbf24]/35 bg-[#fffbeb]' : 'border-[#86efac]/50 bg-[#dcfce7]')}>
-          <div className="flex items-center gap-2">
-            {usingDemo ? <Sparkles className="h-5 w-5 text-[#d97706]" strokeWidth={2.2} /> : <CheckCircle2 className="h-5 w-5 text-[#10b981]" strokeWidth={2.2} />}
-            <span className={cn('text-xs font-extrabold', usingDemo ? 'text-[#b45309]' : 'text-[#047857]')}>
-              {usingDemo ? 'Mode Demo' : connected ? 'Terkoneksi' : 'Menyiapkan data'}
-            </span>
-          </div>
-          <p className="mt-2 text-[11px] font-medium leading-relaxed text-[#5b6f99]">
-            {usingDemo ? 'Menampilkan data contoh. Hubungkan Apps Script di Pengaturan.' : 'Data live dari Google Sheets.'}
+      <div className="mx-3 mb-4 rounded-2xl border border-sidebar-border bg-background-elevated p-4">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              'h-2 w-2 rounded-full',
+              usingDemo ? 'bg-amber-400' : connected ? 'bg-emerald-400' : 'bg-rose-400',
+            )}
+          />
+          <p className="text-xs font-bold">
+            {usingDemo ? 'Mode Demo' : connected ? 'Terkoneksi' : 'Menghubungkan…'}
           </p>
         </div>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          {usingDemo
+            ? 'Hubungkan Supabase untuk menyimpan data.'
+            : 'Semua perubahan tersimpan otomatis ke database.'}
+        </p>
       </div>
     </aside>
   );
 }
 
-export const NAV_ITEMS = NAV;
+function NavButton({
+  active,
+  onClick,
+  icon,
+  label,
+  hint,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+        active ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+      )}
+    >
+      <span
+        className={cn(
+          'grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors',
+          active
+            ? 'bg-primary text-primary-foreground shadow-[0_0_18px_rgba(59,130,246,0.45)]'
+            : 'bg-white/5 text-muted-foreground group-hover:text-foreground',
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className={cn('block truncate text-sm font-bold', active && 'text-primary')}>{label}</span>
+        <span className="block truncate text-[11px] font-medium text-muted-foreground">{hint}</span>
+      </span>
+    </button>
+  );
+}
