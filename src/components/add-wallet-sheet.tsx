@@ -33,11 +33,27 @@ interface AddWalletSheetProps {
   onSubmitted: () => void;
 }
 
+/** Ambil angka saja dari input. Kosong berarti 0 (saldo awal opsional). */
+function parseRupiah(raw: string): number | null {
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return 0;
+  const n = Number(digits);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/** Tampilkan angka dengan titik ribuan, mis. 1250000 -> 1.250.000. */
+function formatRupiahInput(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
 export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: AddWalletSheetProps) {
   const [jenis, setJenis] = useState<Jenis>('bank');
   const [selected, setSelected] = useState<string | null>(null);
   const [nama, setNama] = useState('');
   const [namaDiedit, setNamaDiedit] = useState(false);
+  const [saldoAwal, setSaldoAwal] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -49,6 +65,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     setSelected(null);
     setNama('');
     setNamaDiedit(false);
+    setSaldoAwal('');
     setLogoFile(null);
     setSaving(false);
   }, [open]);
@@ -89,6 +106,10 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     if (!namaDiedit) setNama('');
   }
 
+  function onSaldoChange(e: ChangeEvent<HTMLInputElement>) {
+    setSaldoAwal(formatRupiahInput(e.target.value));
+  }
+
   function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     e.target.value = '';
@@ -114,6 +135,11 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
       toast.error('Nama dompet wajib diisi');
       return;
     }
+    const saldoFinal = parseRupiah(saldoAwal);
+    if (saldoFinal === null) {
+      toast.error('Saldo awal tidak valid', { description: 'Isi dengan angka saja, contoh: 1500000' });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -131,7 +157,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
       const res = await addWallet({
         nama: namaFinal,
         provider: selected,
-        saldo: 0,
+        saldo: saldoFinal,
         jenis,
         logo_url: logoUrl,
       });
@@ -261,6 +287,29 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
                 setNamaDiedit(true);
               }}
             />
+          </section>
+
+          <section className="space-y-2.5">
+            <Label htmlFor="saldo-awal" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Saldo Awal <span className="font-normal normal-case">(opsional)</span>
+            </Label>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                Rp
+              </span>
+              <Input
+                id="saldo-awal"
+                inputMode="numeric"
+                autoComplete="off"
+                value={saldoAwal}
+                placeholder="0"
+                onChange={onSaldoChange}
+                className="pl-10 tabular-nums"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Kosongkan bila saldo mulai dari Rp 0. Saldo ini tidak dihitung sebagai pemasukan.
+            </p>
           </section>
         </div>
 
