@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/lib/theme';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { AddTransactionSheet } from '@/components/add-transaction-sheet';
+import { AddWalletSheet } from '@/components/add-wallet-sheet';
 import { useDashboard } from '@/lib/use-dashboard';
 import { thisMonthRange, type DateRangeValue } from '@/lib/date-range';
 import type { View, TransactionSection } from '@/app/views';
@@ -47,9 +48,19 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const [view, setView] = useState<View>('dashboard');
   const [txSection, setTxSection] = useState<TransactionSection>('all');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [walletSheetOpen, setWalletSheetOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
-  const { data, status, error, usingDemo, refresh, addTransaction, editTransaction, addTransfer } =
-    useDashboard(dateRange);
+  const {
+    data,
+    status,
+    error,
+    usingDemo,
+    refresh,
+    addTransaction,
+    editTransaction,
+    addTransfer,
+    addWallet,
+  } = useDashboard(dateRange);
 
   const loading = status === 'loading';
 
@@ -113,7 +124,9 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
               )}
 
               {view === 'dashboard' && <DashboardView data={data} loading={loading} dateRange={dateRange} />}
-              {view === 'wallets' && <WalletsView data={data} loading={loading} />}
+              {view === 'wallets' && (
+                <WalletsView data={data} loading={loading} onAddWallet={() => setWalletSheetOpen(true)} />
+              )}
               {view === 'transactions' && (
                 <TransactionsView data={data} loading={loading} onAdd={() => setSheetOpen(true)} />
               )}
@@ -136,6 +149,13 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
         addTransaction={addTransaction}
         editTransaction={editTransaction}
         addTransfer={addTransfer}
+      />
+
+      <AddWalletSheet
+        open={walletSheetOpen}
+        onOpenChange={setWalletSheetOpen}
+        addWallet={addWallet}
+        onSubmitted={handleRefresh}
       />
     </>
   );

@@ -25,8 +25,12 @@ export function WalletCard({ wallet, index = 0 }: { wallet: Wallet; index?: numb
             <p className="text-[11px] font-medium uppercase tracking-wider text-white/70">Dompet</p>
             <p className="font-display text-base font-bold leading-tight">{meta.brand}</p>
           </div>
-          <div className="grid h-9 w-12 place-items-center rounded-md bg-white/15 text-xs font-bold tracking-wide backdrop-blur-sm">
-            {meta.glyph}
+          <div className="grid h-9 w-12 place-items-center overflow-hidden rounded-md bg-white/15 text-xs font-bold tracking-wide backdrop-blur-sm">
+            {meta.logoUrl ? (
+              <img src={meta.logoUrl} alt="" className="h-full w-full object-contain p-1" />
+            ) : (
+              meta.glyph
+            )}
           </div>
         </div>
 

@@ -2,11 +2,15 @@ export type TransactionType = 'Pemasukan' | 'Pengeluaran';
 
 export type TransactionSection = 'all' | 'income' | 'expense' | 'transfer';
 
+export type WalletJenis = 'bank' | 'ewallet' | 'lainnya';
+
 export interface Wallet {
   id: string;
   nama: string;
   provider: string;
   saldo: number;
+  jenis: WalletJenis;
+  logoUrl: string | null;
 }
 
 export interface TopExpense {

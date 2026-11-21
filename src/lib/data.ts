@@ -17,6 +17,8 @@ interface WalletRow {
   nama: string;
   provider: string;
   saldo: number | string;
+  jenis?: string | null;
+  logo_url?: string | null;
 }
 
 interface TransactionRow {
@@ -37,7 +39,14 @@ function toNumber(v: number | string): number {
 }
 
 function walletFromRow(r: WalletRow): Wallet {
-  return { id: r.id, nama: r.nama, provider: r.provider, saldo: toNumber(r.saldo) };
+  return {
+    id: r.id,
+    nama: r.nama,
+    provider: r.provider,
+    saldo: toNumber(r.saldo),
+    jenis: (r.jenis === 'ewallet' || r.jenis === 'lainnya' ? r.jenis : 'bank') as Wallet['jenis'],
+    logoUrl: r.logo_url ?? null,
+  };
 }
 
 function transactionFromRow(r: TransactionRow): Transaction {
@@ -297,6 +306,26 @@ export interface WalletInput {
   nama: string;
   provider: string;
   saldo: number;
+  jenis?: Wallet['jenis'];
+  logo_url?: string | null;
+}
+
+/** Unggah logo dompet ke bucket publik. Hanya untuk pengguna yang sudah masuk. */
+export async function uploadWalletLogo(file: File): Promise<{ url: string | null; error: string | null }> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return { url: null, error: 'Sesi tidak ditemukan. Masuk ulang.' };
+
+  const safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-_]+/g, '-');
+  const path = `${userId}/${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage.from('wallet-logos').upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) return { url: null, error: error.message };
+
+  const { data } = supabase.storage.from('wallet-logos').getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
 }
 
 export async function insertWallet(input: WalletInput): Promise<WriteResult> {

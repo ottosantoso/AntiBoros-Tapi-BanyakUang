@@ -1,12 +1,21 @@
-import { Wallet2 } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { DashboardData } from '@/lib/types';
 import { WalletGrid } from '@/components/wallet-card';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatIDR, formatIDRCompact } from '@/lib/format';
 import { getWalletMeta } from '@/lib/wallets';
 
-export function WalletsView({ data, loading }: { data: DashboardData; loading: boolean }) {
+export function WalletsView({
+  data,
+  loading,
+  onAddWallet,
+}: {
+  data: DashboardData;
+  loading: boolean;
+  onAddWallet: () => void;
+}) {
   const wallets = data.dompet;
   const positive = wallets.filter((w) => w.saldo >= 0);
   const negative = wallets.filter((w) => w.saldo < 0);
@@ -58,7 +67,10 @@ export function WalletsView({ data, loading }: { data: DashboardData; loading: b
           <h2 className="font-display text-lg font-bold tracking-tight">Semua Dompet</h2>
           <p className="text-sm text-muted-foreground">Saldo live dari setiap sumber dana</p>
         </div>
-        <Wallet2 className="h-5 w-5 text-muted-foreground" />
+        <Button size="sm" onClick={onAddWallet}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          Tambah Dompet
+        </Button>
       </div>
 
       <WalletGrid wallets={wallets} loading={loading} />

@@ -34,6 +34,8 @@ function normaliseDashboard(raw: unknown): DashboardData {
         nama: String(w.nama),
         provider: String(w.provider ?? w.nama),
         saldo: Number(w.saldo) || 0,
+        jenis: (w.jenis === 'ewallet' || w.jenis === 'lainnya' ? w.jenis : 'bank') as 'bank' | 'ewallet' | 'lainnya',
+        logoUrl: null,
       }))
     : [];
   const topPengeluaran = Array.isArray(d.topPengeluaran)
