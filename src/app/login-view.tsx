@@ -156,10 +156,10 @@ export function LoginView() {
             </div>
 
             <div role="tablist" aria-label="Pilih mode" className="mt-6 grid grid-cols-2 gap-2 rounded-2xl bg-[#f1f5ff] p-1.5">
-              <TabButton active={tab === 'masuk'} onClick={() => setTab('masuk')} icon={<Lock className="h-4 w-4" />}>
+              <TabButton active={tab === 'masuk'} onClick={() => { setTab('masuk'); signupForm.clearErrors(); }} icon={<Lock className="h-4 w-4" />}>
                 Masuk
               </TabButton>
-              <TabButton active={tab === 'daftar'} onClick={() => setTab('daftar')} icon={<User className="h-4 w-4" />}>
+              <TabButton active={tab === 'daftar'} onClick={() => { setTab('daftar'); loginForm.clearErrors(); }} icon={<User className="h-4 w-4" />}>
                 Daftar
               </TabButton>
             </div>
@@ -413,5 +413,76 @@ function Illustration() {
       <path d="M335 230 q-20 -50 0 -80 q20 30 0 80z" fill="#34d399" />
       <rect x="318" y="228" width="34" height="34" rx="6" fill="#ffffff" stroke="#dbe3f5" />
     </svg>
+  );
+}
+
+const passwordBaruSchema = z
+  .object({
+    password: z.string().min(8, 'Password minimal 8 karakter'),
+    confirm: z.string(),
+  })
+  .refine((v) => v.password === v.confirm, { message: 'Konfirmasi password tidak sama', path: ['confirm'] });
+
+type PasswordBaruValues = z.infer<typeof passwordBaruSchema>;
+
+/** Layar setelah pengguna membuka tautan reset password: pilih password baru. */
+export function SetPasswordView({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const form = useForm<PasswordBaruValues>({
+    resolver: zodResolver(passwordBaruSchema),
+    defaultValues: { password: '', confirm: '' },
+  });
+  const err = form.formState.errors;
+
+  async function onSubmit(values: PasswordBaruValues) {
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: values.password });
+    setBusy(false);
+    if (error) {
+      toast.error('Gagal menyimpan password', { description: translateAuthError(error.message) });
+      return;
+    }
+    toast.success('Password berhasil diubah');
+    onDone();
+  }
+
+  return (
+    <main className="min-h-screen bg-[#eef3ff] text-[#0f1a3a]">
+      <div className="relative grid min-h-screen place-items-center overflow-hidden px-4 py-10">
+        <Decor />
+        <section className="relative z-10 w-full max-w-md rounded-[28px] border border-white bg-white/90 p-6 shadow-[0_24px_60px_rgba(37,99,235,0.12)] backdrop-blur md:p-9">
+          <div className="text-center">
+            <h2 className="text-2xl font-extrabold tracking-[-0.02em]">Buat Password Baru</h2>
+            <p className="mt-1.5 text-sm text-[#5b6f99]">Masukkan password baru untuk akun Anda.</p>
+          </div>
+          <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="mt-6 space-y-5">
+            <Field id="new-password" label="Password baru" hint="(minimal 8 karakter)" error={err.password?.message}>
+              <PasswordInput
+                id="new-password"
+                placeholder="Buat password baru"
+                autoComplete="new-password"
+                visible={showPwd}
+                onToggle={() => setShowPwd((v) => !v)}
+                invalid={!!err.password}
+                {...form.register('password')}
+              />
+            </Field>
+            <Field id="confirm-password" label="Ulangi password" error={err.confirm?.message}>
+              <PasswordInput
+                id="confirm-password"
+                placeholder="Ulangi password baru"
+                autoComplete="new-password"
+                visible={showPwd}
+                onToggle={() => setShowPwd((v) => !v)}
+                invalid={!!err.confirm}
+                {...form.register('confirm')}
+              />
+            </Field>
+            <SubmitButton busy={busy} icon={<Lock className="h-4 w-4" />}>Simpan password</SubmitButton>
+          </form>
+        </section>
+      </div>
+    </main>
   );
 }

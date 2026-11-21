@@ -13,7 +13,7 @@ import { BudgetView } from '@/app/budget-view';
 import { TransactionsView } from '@/app/transactions-view';
 import { ScannerView } from '@/app/scanner-view';
 import { SettingsView } from '@/app/settings-view';
-import { LoginView } from '@/app/login-view';
+import { LoginView, SetPasswordView } from '@/app/login-view';
 import { supabase, supabaseConfigured } from '@/lib/supabase-client';
 import { useSession } from '@/lib/use-session';
 import { toast } from 'sonner';
@@ -29,7 +29,7 @@ export default function App() {
 }
 
 function AuthGate() {
-  const { session, loading } = useSession();
+  const { session, loading, recovery, clearRecovery } = useSession();
 
   if (!supabaseConfigured) return <ConfigMissing />;
   if (loading) {
@@ -40,6 +40,7 @@ function AuthGate() {
     );
   }
   if (!session) return <LoginView />;
+  if (recovery) return <SetPasswordView onDone={clearRecovery} />;
   const userName = (session.user.user_metadata?.name as string | undefined) ?? '';
   return <Workspace userName={userName} userEmail={session.user.email ?? ''} />;
 }
