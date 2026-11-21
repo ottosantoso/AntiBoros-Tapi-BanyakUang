@@ -17,10 +17,17 @@ const MAX_BASE64_LENGTH = 11_000_000;
 
 const PROMPT_STRUK = `Kamu adalah sistem pembaca struk belanja/nota/bukti transaksi Indonesia yang sangat teliti.
 Analisis gambar ini dan kembalikan HANYA JSON murni (tanpa markdown, tanpa penjelasan) dengan format:
-{"nominal": number, "deskripsi": "string", "tanggal": "YYYY-MM-DD", "kategori": "string", "jenis": "pengeluaran" | "pemasukan"}
+{"nominal": number, "deskripsi": "string", "tanggal": "YYYY-MM-DD", "kategori": "string", "jenis": "pengeluaran" | "pemasukan", "items": [{"nama": "string", "nominal": number, "kategori": "string"}]}
 
 Aturan:
 - nominal: TOTAL TERBAYAR / GRAND TOTAL paling bawah, angka bulat rupiah tanpa titik/koma.
+- items: RINCIAN setiap barang/menu yang dibeli, satu objek per baris barang. Ikuti aturan ini:
+  - nominal item = total baris (qty × harga satuan). Kalau qty lebih dari 1, tulis qty di nama, misal "Curry Katsu (2x)".
+  - Add-on atau modifier (misal "+HAZELNUT", tambahan topping) digabung ke item induknya, jadi nominalnya dijumlahkan. Jangan dibuat item terpisah.
+  - Jangan masukkan subtotal, total, pembayaran, kembalian, atau pembulatan ke items.
+  - Service charge, pajak (Tax, PB1, PPN), dan biaya layanan dimasukkan sebagai item tersendiri dengan kategori "Biaya admin bank", misal nama "Service Charge (5%)" atau "Pajak (10%)".
+  - Kalau rincian benar-benar tidak terbaca, kembalikan items sebagai array kosong [].
+  - kategori tiap item: tebak singkat (Makan & Minum, Transportasi, Belanja, Hiburan, Kesehatan, Lainnya, Biaya admin bank).
 - deskripsi: nama toko, restoran, atau tujuan transaksi.
 - tanggal: format YYYY-MM-DD. Kalau tanggal tidak terbaca sama sekali, isi string kosong "".
 - kategori: tebak kategori singkat (Makan & Minum, Transportasi, Belanja, Tagihan & Utilitas, Hiburan, Kesehatan, Pendidikan, Lainnya).

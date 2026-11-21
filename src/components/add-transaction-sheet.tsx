@@ -248,8 +248,8 @@ export function AddTransactionSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 border-border bg-popover p-0 shadow-[-14px_0_35px_rgba(0,0,0,0.45)] sm:max-w-[440px]">
-        <SheetHeader className="border-b border-border bg-card px-6 py-5 text-left">
+      <SheetContent side="right" className="flex h-dvh w-full flex-col gap-0 border-border bg-popover p-0 shadow-[-14px_0_35px_rgba(0,0,0,0.45)] sm:max-w-[440px]">
+        <SheetHeader className="shrink-0 border-b border-border bg-card py-5 pl-5 pr-14 text-left sm:px-6 sm:pr-14">
           <div className="flex items-start gap-3">
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-[0_0_18px_rgba(59,130,246,0.4)]">
               <PlusCircle className="h-6 w-6" strokeWidth={2.2} />
@@ -265,8 +265,8 @@ export function AddTransactionSheet({
           </div>
         </SheetHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-y-auto">
-          <div className="flex-1 space-y-5 px-6 py-6">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+          <div className="flex-1 space-y-5 px-5 py-6 sm:px-6">
             {!editing && !lockTab && (
               <div>
                 <Label className="mb-2 block text-sm font-extrabold text-foreground">Jenis</Label>
@@ -412,7 +412,7 @@ export function AddTransactionSheet({
             )}
           </div>
 
-          <SheetFooter className="border-t border-border bg-card px-6 py-4">
+          <SheetFooter className="sticky bottom-0 mt-auto shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
             {editing && onDelete && (
               <Button type="button" variant="outline" onClick={onDelete} disabled={submitting} className="mr-auto h-11 gap-2 rounded-xl border-rose-400/40 font-extrabold text-rose-600 hover:bg-rose-500/10 hover:text-rose-600">
                 <Trash2 className="h-4 w-4" /> Hapus
