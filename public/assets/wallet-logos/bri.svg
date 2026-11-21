@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" role="img" aria-labelledby="title desc">
+<title id="title">BRI</title>
+<desc id="desc">Stylized editable wallet-provider logo placeholder for UI mockups; not official brand artwork.</desc>
+<rect width="480" height="160" rx="18" fill="#FFFFFF"/>
+<g><rect x="40" y="39" width="66" height="66" rx="12" fill="none" stroke="#00529B" stroke-width="9"/><path d="M57 57 H90 M57 73 H90 M57 89 H90" stroke="#00529B" stroke-width="7"/></g>
+<text x="140" y="96" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#00529B">BRI</text>
+</svg>
