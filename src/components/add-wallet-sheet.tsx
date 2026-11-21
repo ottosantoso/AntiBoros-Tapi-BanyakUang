@@ -356,9 +356,9 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
                 Logo Dompet <span className="font-normal normal-case">(opsional)</span>
               </Label>
               <div className="flex items-center gap-3">
-                <div className="grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted">
+                <div className="grid h-20 w-44 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-white p-2">
                   {logoPreview ? (
-                    <img src={logoPreview} alt="Preview logo dompet" className="h-full w-full object-contain p-1" />
+                    <img src={logoPreview} alt="Preview logo dompet" className="h-full w-full object-contain" />
                   ) : (
                     <Upload className="h-5 w-5 text-muted-foreground" />
                   )}

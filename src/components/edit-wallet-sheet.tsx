@@ -21,9 +21,14 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { uploadWalletLogo, type WalletEditInput, type WriteResult } from '@/lib/data';
+import {
+  insertTransaction,
+  uploadWalletLogo,
+  type WalletEditInput,
+  type WriteResult,
+} from '@/lib/data';
 import { formatIDR } from '@/lib/format';
-import type { Wallet } from '@/lib/types';
+import type { TransactionType, Wallet } from '@/lib/types';
 import { BANK_PROVIDERS, EWALLET_PROVIDERS, OTHER_PROVIDER_CODE, providerLogo } from '@/lib/wallet-providers';
 
 type JenisPilihan = 'bank' | 'ewallet';
@@ -35,6 +40,27 @@ const KATALOG = [...BANK_PROVIDERS, ...EWALLET_PROVIDERS];
 /** Kode provider yang dibandingkan dengan katalog: huruf besar, tanpa spasi atau tanda hubung. */
 function kodeProvider(provider: string): string {
   return provider.toUpperCase().replace(/[\s-]/g, '');
+}
+
+/** Tampilan saldo dengan titik ribuan, mis. -1250000 -> -1.250.000. */
+function formatSaldoInput(n: number): string {
+  const digits = String(Math.abs(Math.round(n))).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return (n < 0 ? '-' : '') + digits;
+}
+
+/** Ketikan saldo jadi angka. Kosong dianggap 0; tanda minus di depan diperbolehkan. */
+function parseSaldoInput(raw: string): number | null {
+  const negatif = raw.trim().startsWith('-');
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return 0;
+  const n = Number(digits);
+  if (!Number.isSafeInteger(n)) return null;
+  return negatif ? -n : n;
+}
+
+/** Tanggal hari ini di zona Jakarta, format YYYY-MM-DD. */
+function tanggalHariIni(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
 }
 
 interface EditWalletSheetProps {
@@ -52,6 +78,7 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
   const [nama, setNama] = useState(wallet.nama);
   const [provider, setProvider] = useState(kodeProvider(wallet.provider));
   const [jenisLainnya, setJenisLainnya] = useState<JenisPilihan>(wallet.jenis === 'ewallet' ? 'ewallet' : 'bank');
+  const [saldoInput, setSaldoInput] = useState(formatSaldoInput(wallet.saldo));
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [hapusLogo, setHapusLogo] = useState(false);
@@ -106,6 +133,11 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
       toast.error('Nama dompet wajib diisi');
       return;
     }
+    const saldoBaru = parseSaldoInput(saldoInput);
+    if (saldoBaru === null) {
+      toast.error('Saldo tidak valid');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -135,6 +167,25 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
         return;
       }
 
+      // Saldo tidak ditulis langsung (ditolak database). Selisihnya dicatat sebagai transaksi penyesuaian,
+      // sehingga trigger saldo dan riwayat tetap sinkron.
+      const selisih = saldoBaru - wallet.saldo;
+      if (selisih !== 0) {
+        const adj = await insertTransaction({
+          tanggal: tanggalHariIni(),
+          deskripsi: 'Penyesuaian saldo',
+          tipe: (selisih > 0 ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+          nominal: Math.abs(selisih),
+          walletId: wallet.id,
+          kategori: 'Penyesuaian Saldo',
+        });
+        if (!adj.success) {
+          toast.error('Data dompet tersimpan, tetapi saldo belum diubah', { description: adj.error ?? undefined });
+          onSubmitted();
+          return;
+        }
+      }
+
       toast.success('Dompet diperbarui', { description: namaFinal });
       onSubmitted();
       onClose();
@@ -148,9 +199,7 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b border-border px-6 py-5 text-left">
           <SheetTitle className="font-display text-lg">Ubah Dompet</SheetTitle>
-          <SheetDescription>
-            Saldo saat ini {formatIDR(wallet.saldo)}. Saldo tidak diubah dari sini, gunakan transaksi atau transfer.
-          </SheetDescription>
+          <SheetDescription>Ubah nama, provider, logo, atau saldo dompet.</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
@@ -224,42 +273,67 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
           )}
 
           <section className="space-y-2.5">
+            <Label htmlFor="edit-saldo" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Saldo
+            </Label>
+            <p className="text-sm text-muted-foreground">
+              Saldo saat ini <span className="font-semibold text-foreground">{formatIDR(wallet.saldo)}</span>
+            </p>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                Rp
+              </span>
+              <Input
+                id="edit-saldo"
+                inputMode="numeric"
+                className="pl-10 tnum"
+                value={saldoInput}
+                disabled={saving}
+                onChange={(e) => setSaldoInput(formatSaldoInput(parseSaldoInput(e.target.value) ?? 0))}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Jika diubah, selisihnya dicatat sebagai transaksi "Penyesuaian saldo" (pemasukan atau pengeluaran)
+              dan ikut terhitung di laporan.
+            </p>
+          </section>
+
+          <section className="space-y-2.5">
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Logo Dompet <span className="font-normal normal-case">(opsional)</span>
             </Label>
-            <div className="flex items-center gap-3">
-              <div className="grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted">
-                {previewTampil ? (
-                  <img src={previewTampil} alt="Preview logo dompet" className="h-full w-full object-contain p-1" />
-                ) : (
-                  <Upload className="h-5 w-5 text-muted-foreground" />
-                )}
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="inline-flex cursor-pointer items-center gap-2 self-start rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted">
-                  <Upload className="h-4 w-4" />
-                  {logoFile ? 'Ganti logo' : 'Unggah logo'}
-                  <input type="file" accept={LOGO_ACCEPT} className="sr-only" disabled={saving} onChange={onLogoChange} />
-                </label>
-                {(logoFile || bisaHapusLogo) && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => {
-                      setLogoFile(null);
-                      setHapusLogo(true);
-                    }}
-                    className="inline-flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                    {logoFile ? 'Batalkan logo baru' : 'Hapus logo unggahan'}
-                  </button>
-                )}
-                <p className="text-[11px] text-muted-foreground">
-                  Tanpa logo unggahan, kartu memakai logo provider. PNG, JPG, WEBP, atau SVG, maks 2 MB.
-                </p>
-              </div>
+            {/* Background putih sengaja: logo transparan dan logo SVG tampil sama jelasnya */}
+            <div className="grid h-24 w-full place-items-center overflow-hidden rounded-xl border border-border bg-white p-3">
+              {previewTampil ? (
+                <img src={previewTampil} alt="Preview logo dompet" className="h-full w-full object-contain" />
+              ) : (
+                <Upload className="h-6 w-6 text-muted-foreground" />
+              )}
             </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted">
+                <Upload className="h-4 w-4" />
+                {logoFile ? 'Ganti logo' : wallet.logoUrl ? 'Ganti logo' : 'Unggah logo'}
+                <input type="file" accept={LOGO_ACCEPT} className="sr-only" disabled={saving} onChange={onLogoChange} />
+              </label>
+              {(logoFile || bisaHapusLogo) && (
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => {
+                    setLogoFile(null);
+                    setHapusLogo(true);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                  {logoFile ? 'Batalkan logo baru' : 'Hapus logo unggahan'}
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Tanpa logo unggahan, kartu memakai logo provider. PNG, JPG, WEBP, atau SVG, maks 2 MB.
+            </p>
           </section>
         </div>
 
