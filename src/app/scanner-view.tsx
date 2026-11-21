@@ -30,7 +30,8 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatIDR, toISODate } from '@/lib/format';
-import { scanImage, addTransaction, hasApiUrl } from '@/lib/api';
+import { scanImage, hasApiUrl } from '@/lib/api';
+import { insertTransaction, insertTransactions } from '@/lib/data';
 import type {
   ImageType,
   ScanResult,
@@ -178,40 +179,47 @@ export function ScannerView({ wallets, onSaved }: Props) {
     let ok = 0;
     let fail = 0;
 
+    // Pilihan dompet disimpan sebagai nama; tabel transactions memakai wallet_id.
+    const idDompet = (nama: string) => wallets.find((w) => w.nama === nama)?.id ?? '';
+
     if (result?.imageType === 'struk') {
-      if (!receiptValid) {
+      const walletId = idDompet(receiptWallet);
+      if (!receiptValid || !walletId) {
         setSaving(false);
         toast.error('Data belum lengkap', { description: 'Periksa deskripsi, nominal, dan dompet.' });
         return;
       }
-      const r = await addTransaction({
-        action: 'addTransaction',
+      const r = await insertTransaction({
         tanggal: receipt.tanggal,
         deskripsi: receipt.deskripsi.trim(),
         tipe: receipt.jenis,
         nominal: receiptNumeric,
-        dompet: receiptWallet,
+        walletId,
+        kategori: receipt.kategori,
       });
       if (r.success) ok += 1;
       else fail += 1;
     } else if (result?.imageType === 'mutasi') {
-      if (!mutasiValid) {
+      const walletId = idDompet(rowWallet);
+      if (!mutasiValid || !walletId) {
         setSaving(false);
         toast.error('Tidak ada baris valid', { description: 'Pastikan ada minimal satu transaksi lengkap dan dompet dipilih.' });
         return;
       }
-      for (const row of validRows) {
-        const r = await addTransaction({
-          action: 'addTransaction',
+      // Satu insert untuk seluruh baris mutasi, supaya tidak parsial per baris.
+      const r = await insertTransactions(
+        validRows.map((row) => ({
           tanggal: row.tanggal,
           deskripsi: row.deskripsi.trim(),
           tipe: row.jenis,
           nominal: row.nominal,
-          dompet: rowWallet,
-        });
-        if (r.success) ok += 1;
-        else fail += 1;
-      }
+          walletId,
+          kategori: row.kategori,
+        })),
+      );
+      ok = r.saved;
+      fail = validRows.length - r.saved;
+      if (!r.success) toast.error('Gagal menyimpan', { description: r.error ?? undefined });
     }
 
     setSaving(false);

@@ -1,7 +1,7 @@
 # CODEBASE_MAP: AntiBoros-Tapi-BanyakUang ("Hepeng History")
 
 Pelacak keuangan pribadi (dompet, transaksi, scanner struk/mutasi dengan AI). UI berbahasa Indonesia.
-Dibuat dari Bolt (`.bolt/`). Terakhir dipetakan dari `main` commit `31434c4` (2026-11-21). Setelah itu hanya ditambah 3 file dokumentasi (PR #1), lalu perubahan di branch `feat/tambah-dompet` (lihat bagian Perubahan terbaru).
+Dibuat dari Bolt (`.bolt/`). Terakhir diperbarui setelah Sprint 2 (branch `feat/sprint-2-jalur-data`) di atas `main` commit `7d3c5f3` (PR #5 merge). Riwayat: Sprint 1 (PR #3), tambah dompet (PR #4), menu ubah dompet dan logo (PR #5).
 
 ## Status verifikasi
 Peta ini diverifikasi per file. Bagian yang belum dibuka tandai "belum diverifikasi" dan jangan dianggap fakta.
@@ -32,12 +32,12 @@ src/
     dashboard-view.tsx      metrik, chart arus kas, kategori, target tabungan, transaksi terbaru
     wallets-view.tsx        kartu dompet, rincian saldo, tombol arsip per dompet, bagian Dompet Diarsipkan dengan Pulihkan
     transactions-view.tsx   ringkasan + riwayat + filter (jenis, cari, dompet, tanggal)
-    scanner-view.tsx        upload struk/mutasi -> scan AI (Apps Script) -> review -> simpan (Apps Script)
+    scanner-view.tsx        upload struk/mutasi -> scan AI (Apps Script, scanImage) -> review -> simpan ke Supabase (insertTransaction / insertTransactions, dompet dipetakan dari nama ke id)
     settings-view.tsx       input URL Google Apps Script (localStorage)
     login-view.tsx          halaman masuk, daftar, dan lupa password (Supabase Auth)
   components/
     sidebar, header, cashflow-charts, transaction-list, wallet-card, metric-card, date-range-picker,
-    add-transaction-sheet.tsx   form tambah transaksi (side sheet), simpan via Apps Script
+    add-transaction-sheet.tsx   form tambah transaksi (side sheet), simpan lewat prop addTransaction (Supabase, dari use-dashboard)
     add-wallet-sheet.tsx        form tambah dompet: pilih bank/e-wallet/lainnya, nama, saldo awal opsional,
                                 deteksi nama dompet arsip (pulihkan atau ganti nama arsip lalu buat baru)
     edit-wallet-sheet.tsx       form ubah dompet aktif: nama, provider (jenis mengikuti provider, atau pilih untuk Lainnya), logo. Saldo tidak diubah dari sini.
@@ -48,7 +48,7 @@ src/
     data.ts                 SEMUA akses Supabase: fetchDashboardData, insertTransaction(s), CRUD wallet,
                             arsip/pulihkan/ganti nama/cek nama dompet
     use-dashboard.ts        hook utama: load per date range, polling 30s, bungkus aksi tulis dari data.ts (aksi tulis belum dipakai UI)
-    api.ts                  klien LAMA Google Apps Script (getDashboard, addTransaction, scanImage)
+    api.ts                  klien Google Apps Script. Sisa: scanImage saja (dipensiunkan di Sprint 5). addTransaction sudah dihapus di Sprint 2
     types.ts                semua type (Wallet, Transaction, DashboardData, WalletTransfer, Scan*)
     date-range.ts           preset & format rentang tanggal
     wallets.ts              styling brand dompet (BCA, GoPay, OVO, blu, ...)
@@ -76,18 +76,29 @@ Polling ulang tiap 30 detik. Setelah tulis data, view memanggil `onSaved/onSubmi
 
 ## Status migrasi (PENTING sebelum mengubah kode)
 Proyek sedang pindah dari Google Apps Script/Sheets ke Supabase; belum selesai:
-1. Baca data sudah via Supabase (`data.ts`). Tulis data dan scanner masih via `api.ts` (Apps Script): `add-transaction-sheet.tsx`, `scanner-view.tsx`. `settings-view.tsx` juga masih memakai Apps Script untuk URL-nya. Fungsi tulis transaksi di `data.ts`/`use-dashboard.ts` belum dipakai UI.
-2. Form tambah transaksi memakai nama dompet (`dompet`), sedangkan `insertTransaction` butuh `walletId`.
-3. Fitur transfer antar dompet: tabel, trigger, dan type (`WalletTransfer`, `NewTransferInput`) ada, tapi belum ada fungsi di `data.ts` maupun UI.
-4. Teks UI masih menyebut Google Sheets (lihat Temuan).
-5. Dugaan kuat bermasalah: migrasi ke-2 menjalankan `REVOKE UPDATE (saldo)` pada `wallets`, tapi migrasi ke-1 sudah memberi `GRANT UPDATE` di level tabel. Di PostgreSQL, REVOKE pada kolom tidak mencabut privilege level tabel, jadi REVOKE ini kemungkinan tidak berpengaruh. Sementara `updateWalletRow` di `data.ts` mengirim `saldo` di payload update. Perlu dicek langsung di database.
-6. Migrasi `20261122090000_wallet_archive.sql` sudah terlihat di database (kolom `is_archived` ada). Migrasi `20261122120000_wallet_edit_grants.sql` sudah dijalankan dan hak aksesnya sudah diverifikasi.
+Sprint 1 (login, RLS per user) SELESAI dan terverifikasi di database:
+- Policy `*_owner_*` per user ada di `wallets`, `transactions`, `wallet_transfers`. Role `anon` tidak punya hak SELECT pada ketiga tabel.
+- `authenticated` tidak bisa UPDATE `wallets.saldo` maupun `user_id` (REVOKE kolom berfungsi). Dugaan di bawah sudah tidak berlaku.
+- `DEFAULT_APPS_SCRIPT_URL` dan key di kode sudah dihapus. Placeholder `KEY_ANDA` di `settings-view.tsx` hanya teks contoh.
+- Belum dibuktikan dengan tes dua akun (S1-11). Lupa password (S1-06) belum diverifikasi.
 
-## Perubahan terbaru (branch `feat/tambah-dompet`)
-- Logo SVG provider di sheet Tambah Dompet, termasuk blu by BCA Digital (`wallet-providers.ts`, `public/assets/wallet-logos/`).
-- Field Saldo Awal opsional. Nilainya ditulis ke kolom `saldo` saat dompet dibuat, bukan sebagai transaksi, supaya tidak menambah total pemasukan.
-- Arsip dompet dengan sisa saldo tetap tersimpan. Dompet arsip tidak dipakai untuk transaksi atau transfer baru.
-- Saat nama dompet dipakai lagi dan namanya masih ada di arsip: pilih "Pakai sisa saldo" (pulihkan) atau "Mulai baru" (dompet lama diganti nama jadi `[nama]_[created_at WIB]` dan tetap di arsip, lalu dompet baru dibuat).
+Sprint 2 (jalur tulis ke Supabase), di branch `feat/sprint-2-jalur-data`:
+- Scanner menyimpan ke Supabase lewat `insertTransaction` (struk) dan `insertTransactions` (mutasi, satu insert). Dompet dipetakan dari nama ke `id`.
+- `addTransaction` di `api.ts` dihapus. Form tambah transaksi sudah memakai Supabase sejak sebelumnya.
+- Belum diuji di browser dengan login. Verifikasi manual diperlukan: simpan struk, simpan mutasi, dan saldo dompet berubah.
+
+Yang masih tersisa:
+1. `scanImage` (scan AI) masih lewat Apps Script. Dipindah ke Edge Function di Sprint 5.
+2. `settings-view.tsx` masih menyimpan URL Apps Script untuk scanner. Hilang bersama scanner di Sprint 5.
+3. Transfer antar dompet: tabel, trigger, dan type ada, tapi belum ada fungsi UI (Sprint 3).
+4. Kategori masih teks bebas. `scanner-view` mengirim kategori hasil AI apa adanya (Sprint 4 membuat FK ke subkategori).
+5. Teks UI masih menyebut Google Sheets (lihat Temuan).
+
+## Riwayat perubahan
+- PR #3 (Sprint 1): login, sesi, RLS per user, backfill user_id.
+- PR #4: tambah dompet dengan bank, e-wallet, Lainnya, saldo awal, arsip dengan pulihkan atau mulai baru.
+- PR #5: menu ubah dompet (nama, provider, jenis, logo). Saldo diubah lewat transaksi penyesuaian. Logo unggahan dinormalisasi otomatis ke PNG 480×160. Logo resmi blu by BCA Digital ditambahkan ke katalog.
+- Sprint 2: lihat bagian di atas.
 
 ## Temuan kode (dari file yang sudah dibaca)
 - Delta metrik hardcoded, bukan dari data: `dashboard-view.tsx` memakai `4.2`, `-3.1`, dan persentase tabungan. `transactions-view.tsx` `SummaryCard` selalu menampilkan `+0.0%`.

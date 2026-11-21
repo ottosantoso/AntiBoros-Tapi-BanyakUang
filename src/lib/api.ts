@@ -133,33 +133,6 @@ export interface AddResult {
   error: string | null;
 }
 
-/**
- * POST a new transaction. Apps Script `doPost` reads `e.postData.contents`.
- * NOTE: We deliberately omit the Content-Type header. Setting it to
- * application/json triggers a CORS preflight (OPTIONS) that Apps Script
- * does not handle, causing the request to fail. A bare POST with a JSON
- * string body is sent as text/plain and avoids the preflight.
- */
-export async function addTransaction(payload: NewTransaction): Promise<AddResult> {
-  const base = getApiUrl();
-  if (!base) return { success: false, error: 'URL Apps Script belum diset.' };
-
-  try {
-    const res = await fetch(base, {
-      method: 'POST',
-      redirect: 'follow',
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      return { success: false, error: `Server merespons ${res.status} ${res.statusText}` };
-    }
-    return { success: true, error: null };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Gagal mengirim transaksi.';
-    return { success: false, error: `Gagal menambah transaksi: ${msg}` };
-  }
-}
-
 export interface ScanResponseResult {
   success: boolean;
   data: ScanResult | null;
