@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, ChevronDown, LayoutDashboard, Plus, RefreshCw, ScanLine, Settings, UserRound, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, ChevronDown, LayoutDashboard, LogOut, Plus, RefreshCw, ScanLine, Settings, UserRound, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Logo } from '@/components/logo';
@@ -18,6 +18,7 @@ export function Header({
   usingDemo,
   refreshing,
   showDateRange,
+  onSignOut,
 }: {
   view: View;
   onNavigate: (v: View) => void;
@@ -29,6 +30,7 @@ export function Header({
   usingDemo: boolean;
   refreshing: boolean;
   showDateRange?: boolean;
+  onSignOut: () => void;
 }) {
   const titleMap: Record<View, string> = {
     dashboard: 'Dashboard',
@@ -86,6 +88,10 @@ export function Header({
           <span className="grid h-8 w-8 place-items-center rounded-full bg-[#fed7aa] text-[#9a3412]"><UserRound className="h-4 w-4" /></span>
           <ChevronDown className="mr-1 h-4 w-4 text-[#172554]" />
         </button>
+
+        <Button variant="outline" size="icon" onClick={onSignOut} aria-label="Keluar" title="Keluar" className="h-10 w-10 rounded-full border-[#c7d8f3] bg-white text-[#172554]">
+          <LogOut className="h-4 w-4" />
+        </Button>
 
         <div className="lg:hidden">
           <label className="sr-only" htmlFor="nav-select">Navigasi</label>
