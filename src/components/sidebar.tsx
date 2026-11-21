@@ -4,6 +4,7 @@ import {
   ChevronDown,
   LayoutDashboard,
   List,
+  PiggyBank,
   ScanLine,
   Settings,
   TrendingDown,
@@ -38,6 +39,7 @@ const TX_CHILDREN: TxChild[] = [
 const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[] = [
   { id: 'dashboard', label: 'Dashboard', hint: 'Ringkasan keuangan', icon: LayoutDashboard },
   { id: 'wallets', label: 'Dompet', hint: 'Kelola sumber dana', icon: Wallet },
+  { id: 'budget', label: 'Budget', hint: 'Batas & target tabungan', icon: PiggyBank },
 ];
 
 export function Sidebar({

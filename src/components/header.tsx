@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, LayoutDashboard, List, LogOut, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, LayoutDashboard, List, LogOut, PiggyBank, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Logo } from '@/components/logo';
@@ -108,6 +108,7 @@ export function Header({
           >
             <option value="dashboard">Dashboard</option>
             <option value="wallets">Dompet</option>
+            <option value="budget">Budget</option>
             <option value="transactions:all">Semua Transaksi</option>
             <option value="transactions:income">Pemasukan</option>
             <option value="transactions:expense">Pengeluaran</option>
@@ -124,6 +125,7 @@ export function Header({
 const BASE_TITLES: Record<View, string> = {
   dashboard: 'Dashboard',
   wallets: 'Dompet',
+  budget: 'Budget',
   transactions: 'Transaksi',
   scanner: 'AI Scanner',
   settings: 'Pengaturan',
@@ -143,6 +145,7 @@ function LayoutIcon({ view, txSection }: { view: View; txSection: TransactionSec
   const icons: Record<Exclude<View, 'transactions'>, typeof LayoutDashboard> = {
     dashboard: LayoutDashboard,
     wallets: Wallet,
+    budget: PiggyBank,
     scanner: ScanLine,
     settings: Settings,
   };
