@@ -465,3 +465,177 @@ export async function countTransactionsForWallet(walletId: string): Promise<numb
   if (error) return 0;
   return count ?? 0;
 }
+
+/* ---------- Sprint 4: subkategori, budget, goals ---------- */
+
+export type Budgeting = 'Kebutuhan' | 'Keinginan' | 'Tabungan';
+
+/** Kategori sistem: bukan pemasukan/pengeluaran riil untuk analisa 50/30/20. */
+export const NON_REAL_KATEGORI = new Set(['Transfer', 'Penyesuaian Saldo']);
+
+export interface Subkategori {
+  id: string;
+  nama: string;
+  kategori: string;
+  jenis: TransactionType;
+  budgeting: Budgeting | null;
+}
+
+export interface BudgetLimit {
+  id: string;
+  subkategoriId: string;
+  limit: number;
+}
+
+export interface Goal {
+  id: string;
+  nama: string;
+  target: number;
+  terkumpul: number;
+  deadline: string | null;
+}
+
+export interface BudgetData {
+  subkategori: Subkategori[];
+  budgets: BudgetLimit[];
+  goals: Goal[];
+  /** Pemasukan periode, tanpa kategori sistem (transfer antar dompet, penyesuaian saldo). */
+  pemasukan: number;
+  /** Pengeluaran periode per subkategori_id. */
+  spentBySubkat: Record<string, number>;
+  error: string | null;
+}
+
+interface SubkategoriDbRow {
+  id: string;
+  nama: string;
+  kategori: string;
+  jenis: string;
+  budgeting: string | null;
+}
+
+interface BudgetDbRow {
+  id: string;
+  subkategori_id: string;
+  limit_amount: number | string;
+}
+
+interface GoalDbRow {
+  id: string;
+  nama: string;
+  target: number | string;
+  terkumpul: number | string;
+  deadline: string | null;
+}
+
+interface TxAggDbRow {
+  tipe: string;
+  nominal: number | string;
+  subkategori_id: string | null;
+}
+
+export async function fetchBudgetData(range: { start: string; end: string }): Promise<BudgetData> {
+  try {
+    const [subRes, budRes, goalRes, txRes] = await Promise.all([
+      supabase.from('subkategori').select('id,nama,kategori,jenis,budgeting').order('nama', { ascending: true }),
+      supabase.from('budgets').select('id,subkategori_id,limit_amount'),
+      supabase.from('goals').select('id,nama,target,terkumpul,deadline').order('created_at', { ascending: true }),
+      supabase
+        .from('transactions')
+        .select('tipe,nominal,subkategori_id')
+        .gte('tanggal', range.start)
+        .lte('tanggal', range.end),
+    ]);
+    if (subRes.error) throw subRes.error;
+    if (budRes.error) throw budRes.error;
+    if (goalRes.error) throw goalRes.error;
+    if (txRes.error) throw txRes.error;
+
+    const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[]).map((r) => ({
+      id: r.id,
+      nama: r.nama,
+      kategori: r.kategori,
+      jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+      budgeting: (r.budgeting as Budgeting | null) ?? null,
+    }));
+    const kategoriById = new Map(subkategori.map((s) => [s.id, s.kategori]));
+
+    let pemasukan = 0;
+    const spentBySubkat: Record<string, number> = {};
+    for (const r of (txRes.data ?? []) as TxAggDbRow[]) {
+      const nominal = toNumber(r.nominal);
+      const kat = r.subkategori_id ? kategoriById.get(r.subkategori_id) : undefined;
+      if (r.tipe === 'Pemasukan') {
+        if (!(kat && NON_REAL_KATEGORI.has(kat))) pemasukan += nominal;
+      } else if (r.subkategori_id) {
+        spentBySubkat[r.subkategori_id] = (spentBySubkat[r.subkategori_id] ?? 0) + nominal;
+      }
+    }
+
+    return {
+      subkategori,
+      budgets: ((budRes.data ?? []) as BudgetDbRow[]).map((r) => ({
+        id: r.id,
+        subkategoriId: r.subkategori_id,
+        limit: toNumber(r.limit_amount),
+      })),
+      goals: ((goalRes.data ?? []) as GoalDbRow[]).map((r) => ({
+        id: r.id,
+        nama: r.nama,
+        target: toNumber(r.target),
+        terkumpul: toNumber(r.terkumpul),
+        deadline: r.deadline,
+      })),
+      pemasukan,
+      spentBySubkat,
+      error: null,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Gagal memuat data budget.';
+    return { subkategori: [], budgets: [], goals: [], pemasukan: 0, spentBySubkat: {}, error: message };
+  }
+}
+
+export async function upsertBudgetLimit(subkategoriId: string, limit: number): Promise<WriteResult> {
+  const { error } = await supabase
+    .from('budgets')
+    .upsert({ subkategori_id: subkategoriId, limit_amount: limit }, { onConflict: 'user_id,subkategori_id' });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function deleteBudgetRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase.from('budgets').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export interface GoalInput {
+  nama: string;
+  target: number;
+  terkumpul?: number;
+  deadline?: string | null;
+}
+
+export async function insertGoal(input: GoalInput): Promise<WriteResult> {
+  const { error } = await supabase.from('goals').insert({
+    nama: input.nama,
+    target: input.target,
+    terkumpul: input.terkumpul ?? 0,
+    deadline: input.deadline ?? null,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function updateGoalRow(id: string, patch: Partial<GoalInput>): Promise<WriteResult> {
+  const { error } = await supabase.from('goals').update(patch).eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function deleteGoalRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase.from('goals').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}

@@ -116,3 +116,10 @@ Yang masih tersisa:
 ## Keamanan
 - `settings-view.tsx` memuat URL Apps Script default lengkap dengan parameter `?key=...` di repo publik. Key yang sama muncul juga di atribut `placeholder` input. Sebaiknya key diganti (rotate) dan URL dipindah ke env/pengaturan.
 - Policy RLS terbuka untuk `anon`. Siapa pun yang punya anon key (yang memang ada di bundle frontend) bisa membaca dan mengubah semua data. Ini disengaja untuk single-tenant, tapi perlu diingat jika data menjadi lebih sensitif.
+
+## Sprint 4: Budget & Subkategori (status)
+
+- Migrasi `20261122140000_subkategori_budget_goals.sql` (PR #10, sudah diterapkan): tabel `subkategori`, `budgets`, `goals`, kolom `transactions.subkategori_id`, seed default per akun, RLS pemilik baris.
+- `src/lib/data.ts` (bagian Sprint 4): `fetchBudgetData`, `upsertBudgetLimit`, `deleteBudgetRow`, `insertGoal`, `updateGoalRow`, `deleteGoalRow`. `NON_REAL_KATEGORI` mengecualikan kategori Transfer dan Penyesuaian Saldo dari pemasukan dan 50/30/20.
+- `src/app/budget-view.tsx`: menu Budget (sidebar, header, select mobile, App.tsx). Berisi ringkasan 50/30/20, batas per subkategori, dan target tabungan (isi terkumpul manual).
+- Belum: dropdown subkategori di form transaksi dan pemetaan kategori AI di scanner (akan dikerjakan di PR berikutnya). Form transaksi masih memakai kategori teks.
