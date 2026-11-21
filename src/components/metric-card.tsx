@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowUpRight, Wallet, PiggyBank, TrendingUp, TrendingDown } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, PiggyBank, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -14,120 +14,84 @@ interface Props {
   loading?: boolean;
 }
 
-const STYLES: Record<
-  Metric,
-  {
-    icon: typeof Wallet;
-    iconBg: string;
-    iconColor: string;
-    valueClass: string;
-    sparkClass: string;
-    ring: string;
-  }
-> = {
+const STYLES: Record<Metric, { icon: typeof Wallet; card: string; iconBg: string; iconColor: string; valueClass: string; line: string }> = {
   balance: {
     icon: Wallet,
-    iconBg: 'bg-balance-soft',
-    iconColor: 'text-balance',
-    valueClass: 'gradient-text-balance',
-    sparkClass: 'bg-balance',
-    ring: 'group-hover:border-balance/40',
+    card: 'border-[#93c5fd] bg-[#e0f2fe]',
+    iconBg: 'bg-[#bfdbfe]',
+    iconColor: 'text-[#0284c7]',
+    valueClass: 'text-[#172554]',
+    line: '#0284c7',
   },
   income: {
     icon: ArrowDownLeft,
-    iconBg: 'bg-income-soft',
-    iconColor: 'text-income',
-    valueClass: 'gradient-text-income',
-    sparkClass: 'bg-income',
-    ring: 'group-hover:border-income/40',
+    card: 'border-[#a7f3d0] bg-[#dcfce7]',
+    iconBg: 'bg-[#86efac]',
+    iconColor: 'text-[#047857]',
+    valueClass: 'text-[#172554]',
+    line: '#10b981',
   },
   expense: {
     icon: ArrowUpRight,
-    iconBg: 'bg-expense-soft',
-    iconColor: 'text-expense',
-    valueClass: 'gradient-text-expense',
-    sparkClass: 'bg-expense',
-    ring: 'group-hover:border-expense/40',
+    card: 'border-[#fecdd3] bg-[#ffe4e6]',
+    iconBg: 'bg-[#fda4af]',
+    iconColor: 'text-[#be123c]',
+    valueClass: 'text-[#172554]',
+    line: '#f43f5e',
   },
   savings: {
     icon: PiggyBank,
-    iconBg: 'bg-savings-soft',
-    iconColor: 'text-savings',
-    valueClass: 'text-savings',
-    sparkClass: 'bg-savings',
-    ring: 'group-hover:border-savings/40',
+    card: 'border-[#ddd6fe] bg-[#f3e8ff]',
+    iconBg: 'bg-[#ddd6fe]',
+    iconColor: 'text-[#6d28d9]',
+    valueClass: 'text-[#4c1d95]',
+    line: '#8b5cf6',
   },
 };
 
 export function MetricCard({ metric, label, value, delta, loading }: Props) {
-  const s = STYLES[metric];
-  const Icon = s.icon;
+  const style = STYLES[metric];
+  const Icon = style.icon;
   const positive = (delta ?? 0) >= 0;
 
   if (loading) {
     return (
-      <Card className="lift border-border/60 p-5">
-        <div className="flex items-start justify-between">
-          <Skeleton className="h-10 w-10 rounded-xl" />
-          <Skeleton className="h-5 w-14 rounded-full" />
-        </div>
-        <Skeleton className="mt-4 h-3 w-24" />
-        <Skeleton className="mt-2 h-8 w-40" />
-        <Skeleton className="mt-3 h-1.5 w-full rounded-full" />
+      <Card className="rounded-2xl border-[#dbeafe] bg-white p-4 shadow-[0_6px_18px_rgba(30,64,175,0.06)]">
+        <div className="flex items-start justify-between"><Skeleton className="h-10 w-10 rounded-xl" /><Skeleton className="h-6 w-16 rounded-full" /></div>
+        <Skeleton className="mt-4 h-3 w-28" /><Skeleton className="mt-2 h-8 w-40" /><Skeleton className="mt-4 h-1.5 w-full rounded-full" />
       </Card>
     );
   }
 
   return (
-    <Card className={cn('lift group border-border/60 p-5 transition-colors', s.ring)}>
+    <Card className={cn('group relative overflow-hidden rounded-2xl border p-4 shadow-[0_6px_18px_rgba(30,64,175,0.06)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(30,64,175,0.12)]', style.card)}>
       <div className="flex items-start justify-between">
-        <div className={cn('grid h-10 w-10 place-items-center rounded-xl', s.iconBg)}>
-          <Icon className={cn('h-5 w-5', s.iconColor)} strokeWidth={2.4} />
+        <div className={cn('grid h-10 w-10 place-items-center rounded-xl', style.iconBg)}>
+          <Icon className={cn('h-5 w-5', style.iconColor)} strokeWidth={2.4} />
         </div>
         {typeof delta === 'number' && (
-          <span
-            className={cn(
-              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
-              positive ? 'bg-income-soft text-income' : 'bg-expense-soft text-expense',
-            )}
-          >
-            {metric === 'expense' ? (
-              positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />
-            ) : positive ? (
-              <TrendingUp className="h-3 w-3" />
-            ) : (
-              <TrendingDown className="h-3 w-3" />
-            )}
+          <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-extrabold', positive ? 'bg-[#bbf7d0] text-[#047857]' : 'bg-[#fecdd3] text-[#be123c]')}>
+            {positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
             {formatPercent(delta)}
           </span>
         )}
       </div>
-
-      <p className="mt-4 text-sm font-medium text-muted-foreground">{label}</p>
-      <p className={cn('mt-1 font-display text-2xl font-bold tracking-tight tnum', s.valueClass)}>
-        {formatIDR(value)}
-      </p>
-
-      {/* mini sparkline bar */}
-      <div className="mt-4 flex h-1.5 items-end gap-1">
-        {[40, 65, 45, 80, 55, 70, 90].map((h, i) => (
-          <span
-            key={i}
-            className={cn('flex-1 rounded-full opacity-70 transition-all duration-500', s.sparkClass)}
-            style={{ height: `${h}%` }}
-          />
-        ))}
-      </div>
+      <p className="mt-3 text-[13px] font-bold text-[#172554]">{label}</p>
+      <p className={cn('mt-1 font-display text-[25px] font-extrabold tracking-[-0.03em] tnum', style.valueClass)}>{formatIDR(value)}</p>
+      <Sparkline color={style.line} />
     </Card>
   );
 }
 
-export function MetricsSkeleton() {
+function Sparkline({ color }: { color: string }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <MetricCard key={i} metric="balance" label="" value={0} loading />
-      ))}
-    </div>
+    <svg className="mt-3 h-6 w-full overflow-visible" viewBox="0 0 180 24" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 18 C16 17 18 20 31 16 S48 18 61 13 S77 16 91 12 S105 16 119 9 S134 13 146 6 S162 10 180 3" fill="none" stroke={color} strokeLinecap="round" strokeWidth="2" />
+      <path d="M0 19 C16 18 18 21 31 17 S48 19 61 14 S77 17 91 13 S105 17 119 10 S134 14 146 7 S162 11 180 4" fill="none" stroke={color} strokeLinecap="round" strokeOpacity="0.14" strokeWidth="7" />
+    </svg>
   );
+}
+
+export function MetricsSkeleton() {
+  return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, i) => <MetricCard key={i} metric="balance" label="" value={0} loading />)}</div>;
 }

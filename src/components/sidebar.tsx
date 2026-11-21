@@ -1,4 +1,12 @@
-import { LayoutDashboard, Wallet, ArrowLeftRight, ScanLine, Settings, Sparkles } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  CheckCircle2,
+  LayoutDashboard,
+  ScanLine,
+  Settings,
+  Sparkles,
+  Wallet,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
 import type { View } from '@/app/views';
@@ -23,19 +31,19 @@ export function Sidebar({
   usingDemo: boolean;
 }) {
   return (
-    <aside className="hidden h-full w-[260px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
-      <div className="flex items-center gap-3 px-6 py-6">
-        <Logo />
+    <aside className="hidden min-h-screen w-[252px] shrink-0 flex-col border-r border-[#dbeafe] bg-white lg:flex">
+      <div className="flex items-center gap-3 px-7 py-7">
+        <Logo size={46} />
         <div className="min-w-0">
-          <p className="font-display text-[15px] font-extrabold leading-tight tracking-tight">
+          <p className="font-display text-[16px] font-extrabold leading-tight tracking-[-0.03em] text-[#172554]">
             Hepeng History
           </p>
-          <p className="truncate text-xs text-muted-foreground">Personal Finance</p>
+          <p className="mt-0.5 text-xs font-medium text-[#5b6f99]">Personal Finance</p>
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 px-3">
-        <p className="px-3 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+      <nav className="flex flex-1 flex-col gap-1.5 px-4">
+        <p className="px-3 pb-2 pt-2 text-[11px] font-bold uppercase tracking-[0.08em] text-[#1e3a8a]">
           Menu
         </p>
         {NAV.map((item) => {
@@ -46,50 +54,37 @@ export function Sidebar({
               key={item.id}
               onClick={() => onNavigate(item.id)}
               className={cn(
-                'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
+                'group relative flex items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-200',
                 active
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  ? 'bg-[#e0f2fe] text-[#1d4ed8] shadow-[0_8px_20px_rgba(37,99,235,0.08)]'
+                  : 'text-[#172554] hover:bg-[#f4f8ff] hover:text-[#1d4ed8]',
               )}
             >
-              {active && (
-                <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
-              )}
-              <Icon
-                className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')}
-                strokeWidth={2.2}
-              />
+              {active && <span className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-[#2563eb]" />}
+              <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-colors', active ? 'bg-[#bfdbfe] text-[#2563eb]' : 'bg-[#eff6ff] text-[#335b9e] group-hover:bg-[#dbeafe]')}>
+                <Icon className="h-[19px] w-[19px]" strokeWidth={2.2} />
+              </span>
               <span className="flex flex-col items-start leading-tight">
-                <span>{item.label}</span>
-                <span className="text-[11px] font-normal text-muted-foreground/70">{item.hint}</span>
+                <span className="text-sm font-bold">{item.label}</span>
+                <span className={cn('mt-1 text-[11px] font-medium', active ? 'text-[#2563eb]/75' : 'text-[#6b7da4]')}>
+                  {item.hint}
+                </span>
               </span>
             </button>
           );
         })}
       </nav>
 
-      <div className="px-3 pb-4">
-        <div
-          className={cn(
-            'rounded-xl border p-3',
-            usingDemo
-              ? 'border-warning/30 bg-warning-soft'
-              : 'border-income/30 bg-income-soft',
-          )}
-        >
+      <div className="px-4 pb-5">
+        <div className={cn('rounded-2xl border p-4', usingDemo ? 'border-[#fbbf24]/35 bg-[#fffbeb]' : 'border-[#86efac]/50 bg-[#dcfce7]')}>
           <div className="flex items-center gap-2">
-            <Sparkles
-              className={cn('h-4 w-4', usingDemo ? 'text-warning' : 'text-income')}
-              strokeWidth={2.2}
-            />
-            <span className={cn('text-xs font-semibold', usingDemo ? 'text-warning' : 'text-income')}>
-              {usingDemo ? 'Mode Demo' : 'Terkoneksi'}
+            {usingDemo ? <Sparkles className="h-5 w-5 text-[#d97706]" strokeWidth={2.2} /> : <CheckCircle2 className="h-5 w-5 text-[#10b981]" strokeWidth={2.2} />}
+            <span className={cn('text-xs font-extrabold', usingDemo ? 'text-[#b45309]' : 'text-[#047857]')}>
+              {usingDemo ? 'Mode Demo' : connected ? 'Terkoneksi' : 'Menyiapkan data'}
             </span>
           </div>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-            {usingDemo
-              ? 'Menampilkan data contoh. Hubungkan Apps Script di Pengaturan.'
-              : 'Data live dari Google Sheets.'}
+          <p className="mt-2 text-[11px] font-medium leading-relaxed text-[#5b6f99]">
+            {usingDemo ? 'Menampilkan data contoh. Hubungkan Apps Script di Pengaturan.' : 'Data live dari Google Sheets.'}
           </p>
         </div>
       </div>

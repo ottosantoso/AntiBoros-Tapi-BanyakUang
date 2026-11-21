@@ -171,7 +171,7 @@ export async function insertTransactions(
   inputs: NewTransactionInput[],
 ): Promise<WriteResult & { saved: number }> {
   if (!inputs.length) return { success: true, error: null, saved: 0 };
-  const { error, count } = await supabase
+  const { error } = await supabase
     .from('transactions')
     .insert(
       inputs.map((i) => ({
@@ -182,10 +182,9 @@ export async function insertTransactions(
         kategori: i.kategori || null,
         wallet_id: i.walletId || null,
       })),
-    )
-    .select('id', { count: 'exact' });
+    );
   if (error) return { success: false, error: error.message, saved: 0 };
-  return { success: true, error: null, saved: count ?? inputs.length };
+  return { success: true, error: null, saved: inputs.length };
 }
 
 /* ---------- Write: wallets (CRUD) ---------- */

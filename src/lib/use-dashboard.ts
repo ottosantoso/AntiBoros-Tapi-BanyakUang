@@ -104,6 +104,7 @@ export function useDashboard(range: { from?: Date; to?: Date }) {
 
   return {
     ...state,
+    usingDemo: false,
     refresh: () => load(),
     addTransaction,
     addTransactions,

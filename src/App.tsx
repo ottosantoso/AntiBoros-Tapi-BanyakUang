@@ -48,7 +48,7 @@ export default function App() {
           />
 
           <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
-            <div className="mx-auto max-w-7xl animate-fade-in">
+            <div className="mx-auto max-w-[1440px] animate-fade-in">
               {error && status === 'error' && (
                 <div className="mb-4 flex flex-col gap-1 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
                   <span>

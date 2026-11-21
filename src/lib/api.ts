@@ -30,9 +30,9 @@ function normaliseDashboard(raw: unknown): DashboardData {
   const d = (raw ?? {}) as Partial<DashboardData>;
   const dompet = Array.isArray(d.dompet)
     ? d.dompet.map((w) => ({
-        id: String((w as Record<string, unknown>).id ?? ''),
+        id: String(w.id ?? ''),
         nama: String(w.nama),
-        provider: String((w as Record<string, unknown>).provider ?? w.nama),
+        provider: String(w.provider ?? w.nama),
         saldo: Number(w.saldo) || 0,
       }))
     : [];
