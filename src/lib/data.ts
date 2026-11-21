@@ -34,6 +34,7 @@ interface TransactionRow {
   wallet_id: string | null;
   berulang: boolean | null;
   transfer_id: string | null;
+  subkategori_id?: string | null;
   created_at: string | null;
 }
 
@@ -68,6 +69,7 @@ function transactionFromRow(r: TransactionRow): Transaction {
     walletId: r.wallet_id ?? undefined,
     berulang: r.berulang ?? false,
     transferId: r.transfer_id ?? undefined,
+    subkategoriId: r.subkategori_id ?? undefined,
     createdAt: r.created_at ?? undefined,
     dompet: '',
   };
@@ -182,6 +184,7 @@ export interface NewTransactionInput {
   nominal: number;
   walletId: string;
   kategori?: string;
+  subkategoriId?: string | null;
   berulang?: boolean;
 }
 
@@ -192,6 +195,7 @@ export async function insertTransaction(input: NewTransactionInput): Promise<Wri
     tipe: input.tipe,
     nominal: input.nominal,
     kategori: input.kategori || null,
+    subkategori_id: input.subkategoriId || null,
     wallet_id: input.walletId || null,
     berulang: input.berulang ?? false,
   });
@@ -211,6 +215,7 @@ export async function updateTransactionRow(
   if (input.tipe !== undefined) patch.tipe = input.tipe;
   if (input.nominal !== undefined) patch.nominal = input.nominal;
   if (input.kategori !== undefined) patch.kategori = input.kategori || null;
+  if (input.subkategoriId !== undefined) patch.subkategori_id = input.subkategoriId || null;
   if (input.walletId !== undefined) patch.wallet_id = input.walletId || null;
   if (input.berulang !== undefined) patch.berulang = input.berulang;
   const { error } = await supabase.from('transactions').update(patch).eq('id', id);
@@ -307,6 +312,7 @@ export async function insertTransactions(
         tipe: i.tipe,
         nominal: i.nominal,
         kategori: i.kategori || null,
+        subkategori_id: i.subkategoriId || null,
         wallet_id: i.walletId || null,
       })),
     );
@@ -638,4 +644,40 @@ export async function deleteGoalRow(id: string): Promise<WriteResult> {
   const { error } = await supabase.from('goals').delete().eq('id', id);
   if (error) return { success: false, error: error.message };
   return { success: true, error: null };
+}
+
+/** Daftar subkategori milik pengguna, untuk dropdown transaksi dan pemetaan scanner. */
+export async function fetchSubkategori(): Promise<Subkategori[]> {
+  const { data, error } = await supabase
+    .from('subkategori')
+    .select('id,nama,kategori,jenis,budgeting')
+    .order('nama', { ascending: true });
+  if (error || !data) return [];
+  return (data as SubkategoriDbRow[]).map((r) => ({
+    id: r.id,
+    nama: r.nama,
+    kategori: r.kategori,
+    jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+    budgeting: (r.budgeting as Budgeting | null) ?? null,
+  }));
+}
+
+/**
+ * Cocokkan teks kategori (dari AI scanner) ke subkategori yang ada.
+ * Urutan: nama persis, lalu kategori persis, lalu fallback 'Lain-lain' (pengeluaran)
+ * atau 'Pendapatan Lainnya' (pemasukan).
+ */
+export function matchSubkategori(
+  list: Subkategori[],
+  kategori: string,
+  jenis: TransactionType,
+): Subkategori | undefined {
+  const k = kategori.trim().toLowerCase();
+  const sameJenis = list.filter((s) => s.jenis === jenis);
+  const exact =
+    sameJenis.find((s) => s.nama.toLowerCase() === k) ??
+    sameJenis.find((s) => s.kategori.toLowerCase() === k);
+  if (exact) return exact;
+  const fallbackNama = jenis === 'Pemasukan' ? 'Pendapatan Lainnya' : 'Lain-lain';
+  return sameJenis.find((s) => s.nama === fallbackNama);
 }

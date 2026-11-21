@@ -42,6 +42,8 @@ export interface Transaction {
   /** ID dompet di database. */
   walletId?: string;
   kategori?: string;
+  /** ID subkategori (tabel subkategori). */
+  subkategoriId?: string;
   berulang?: boolean;
   transferId?: string;
   createdAt?: string;
