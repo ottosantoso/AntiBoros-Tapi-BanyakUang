@@ -50,6 +50,7 @@ export function Sidebar({
   usingDemo,
   userEmail,
   onSignOut,
+  open,
 }: {
   view: View;
   txSection: TransactionSection;
@@ -58,12 +59,20 @@ export function Sidebar({
   usingDemo: boolean;
   userEmail: string;
   onSignOut: () => void;
+  /** Hanya berpengaruh di layar kecil (drawer). Di desktop sidebar selalu tampil. */
+  open: boolean;
 }) {
   const [txOpen, setTxOpen] = useState(true);
   const txActive = view === 'transactions';
 
   return (
-    <aside className="sticky top-0 z-20 flex h-screen w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+    <aside
+      className={cn(
+        'fixed inset-y-0 left-0 z-50 flex w-[264px] max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-out',
+        open ? 'translate-x-0' : '-translate-x-full',
+        'lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:shrink-0 lg:translate-x-0',
+      )}
+    >
       <div className="flex items-center gap-3 px-5 pt-6 pb-5">
         <Logo size={40} />
         <div className="min-w-0">

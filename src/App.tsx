@@ -49,6 +49,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const [view, setView] = useState<View>('dashboard');
   const [txSection, setTxSection] = useState<TransactionSection>('all');
   const [walletSheetOpen, setWalletSheetOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
   const {
     data,
@@ -72,6 +73,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const handleNavigate = useCallback((nextView: View, section?: TransactionSection) => {
     setView(nextView);
     if (section) setTxSection(section);
+    setNavOpen(false);
   }, []);
 
   // Setelah keluar, useSession mengembalikan pengguna ke halaman masuk.
@@ -91,12 +93,22 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
           usingDemo={usingDemo}
           userEmail={userEmail}
           onSignOut={handleSignOut}
+          open={navOpen}
         />
+
+        {navOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            onClick={() => setNavOpen(false)}
+            aria-hidden="true"
+          />
+        )}
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Header
             view={view}
             txSection={txSection}
+            onMenuToggle={() => setNavOpen((o) => !o)}
             onNavigate={handleNavigate}
             onRefresh={handleRefresh}
             onDateRangeChange={setDateRange}
