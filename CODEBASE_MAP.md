@@ -122,4 +122,5 @@ Yang masih tersisa:
 - Migrasi `20261122140000_subkategori_budget_goals.sql` (PR #10, sudah diterapkan): tabel `subkategori`, `budgets`, `goals`, kolom `transactions.subkategori_id`, seed default per akun, RLS pemilik baris.
 - `src/lib/data.ts` (bagian Sprint 4): `fetchBudgetData`, `upsertBudgetLimit`, `deleteBudgetRow`, `insertGoal`, `updateGoalRow`, `deleteGoalRow`. `NON_REAL_KATEGORI` mengecualikan kategori Transfer dan Penyesuaian Saldo dari pemasukan dan 50/30/20.
 - `src/app/budget-view.tsx`: menu Budget (sidebar, header, select mobile, App.tsx). Berisi ringkasan 50/30/20, batas per subkategori, dan target tabungan (isi terkumpul manual).
-- Belum: dropdown subkategori di form transaksi dan pemetaan kategori AI di scanner (akan dikerjakan di PR berikutnya). Form transaksi masih memakai kategori teks.
+- PR #13: dropdown subkategori di form transaksi (`add-transaction-sheet.tsx`), pemetaan kategori AI ke subkategori di scanner (`scanner-view.tsx`, `matchSubkategori` di `data.ts`), dan penyesuaian saldo memakai subkategori `Penyesuaian Saldo` (`edit-wallet-sheet.tsx`).
+- Belum diuji di browser: tambah dan edit transaksi, scan struk dan mutasi, penyesuaian saldo, menu Budget.
