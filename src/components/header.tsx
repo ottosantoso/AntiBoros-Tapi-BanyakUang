@@ -1,7 +1,6 @@
-import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, LayoutDashboard, List, LogOut, PiggyBank, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, LayoutDashboard, List, LogOut, Menu, PiggyBank, RefreshCw, ScanLine, Settings, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Logo } from '@/components/logo';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { cn } from '@/lib/utils';
 import type { DateRangeValue } from '@/lib/date-range';
@@ -17,7 +16,7 @@ const TX_TITLES: Record<TransactionSection, string> = {
 export function Header({
   view,
   txSection,
-  onNavigate,
+  onMenuToggle,
   onRefresh,
   onDateRangeChange,
   dateRange,
@@ -31,7 +30,8 @@ export function Header({
 }: {
   view: View;
   txSection: TransactionSection;
-  onNavigate: (v: View, section?: TransactionSection) => void;
+  onMenuToggle: () => void;
+  onNavigate?: (v: View, section?: TransactionSection) => void;
   onRefresh: () => void;
   onDateRangeChange: (r: DateRangeValue) => void;
   dateRange: DateRangeValue;
@@ -46,10 +46,22 @@ export function Header({
   const title = view === 'transactions' ? TX_TITLES[txSection] : BASE_TITLES[view];
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-[72px] items-center gap-3 border-b border-sidebar-border bg-background/90 px-4 backdrop-blur-xl md:px-6">
-      <div className="flex items-center gap-2.5 lg:hidden">
-        <Logo size={36} />
-      </div>
+    <header className="sticky top-0 z-30 flex min-h-[64px] items-center gap-2 border-b border-sidebar-border bg-background/90 px-3 backdrop-blur-xl sm:gap-3 sm:px-4 md:px-6 lg:min-h-[72px]">
+      {/* Tombol menu: hanya di layar kecil, membuka drawer sidebar */}
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={onMenuToggle}
+        aria-label="Buka menu"
+        className="h-10 w-10 shrink-0 rounded-full border-border bg-card text-foreground lg:hidden"
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+
+      {/* Judul halaman untuk layar kecil */}
+      <h1 className="min-w-0 flex-1 truncate font-display text-base font-extrabold tracking-[-0.02em] text-foreground lg:hidden">
+        {title}
+      </h1>
 
       <div className="hidden min-w-0 items-center gap-3 lg:flex">
         <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_20px_rgba(59,130,246,0.4)]">
@@ -64,18 +76,18 @@ export function Header({
       </div>
 
       {showDateRange && (
-        <div className="ml-auto lg:hidden">
+        <div className="shrink-0 lg:hidden">
           <DateRangePicker range={dateRange} onChange={onDateRangeChange} />
         </div>
       )}
 
-      <div className={cn('flex flex-1 items-center justify-end gap-2', showDateRange && 'lg:ml-2')}>
-        <div className={cn('hidden items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-extrabold sm:flex', usingDemo ? 'border-amber-400/30 bg-amber-400/10 text-amber-300' : status === 'error' ? 'border-rose-400/30 bg-rose-400/10 text-rose-300' : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300')}>
+      <div className={cn('flex shrink-0 items-center justify-end gap-2 lg:flex-1', showDateRange && 'lg:ml-2')}>
+        <div className={cn('hidden items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-extrabold md:flex', usingDemo ? 'border-amber-400/30 bg-amber-400/10 text-amber-300' : status === 'error' ? 'border-rose-400/30 bg-rose-400/10 text-rose-300' : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300')}>
           {usingDemo || status === 'error' ? <AlertTriangle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
           {usingDemo ? 'Data Demo' : status === 'error' ? 'Gagal memuat' : 'Live'}
         </div>
 
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing} className="h-10 gap-2 rounded-full border-border bg-card px-3.5 font-bold text-foreground hover:bg-accent hover:bg-accent/40 hover:text-accent-foreground">
+        <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing} aria-label="Muat ulang" className="h-10 gap-2 rounded-full border-border bg-card px-3 font-bold text-foreground hover:bg-accent hover:bg-accent/40 hover:text-accent-foreground sm:px-3.5">
           <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
           <span className="hidden sm:inline">Muat Ulang</span>
         </Button>
@@ -91,31 +103,11 @@ export function Header({
             <span className="max-w-[140px] truncate text-[11px] text-muted-foreground">{userEmail}</span>
           </span>
         </div>
-        <Button variant="outline" size="icon" onClick={onSignOut} aria-label="Keluar" title="Keluar" className="h-10 w-10 rounded-full border-border bg-card text-foreground">
-          <LogOut className="h-4 w-4" />
-        </Button>
-
-        <div className="lg:hidden">
-          <label className="sr-only" htmlFor="nav-select">Navigasi</label>
-          <select
-            id="nav-select"
-            value={view === 'transactions' ? `transactions:${txSection}` : view}
-            onChange={(e) => {
-              const [v, section] = e.target.value.split(':');
-              onNavigate(v as View, section as TransactionSection | undefined);
-            }}
-            className="h-10 rounded-xl border border-border bg-card px-2 text-sm font-bold text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="dashboard">Dashboard</option>
-            <option value="wallets">Dompet</option>
-            <option value="budget">Budget</option>
-            <option value="transactions:all">Semua Transaksi</option>
-            <option value="transactions:income">Pemasukan</option>
-            <option value="transactions:expense">Pengeluaran</option>
-            <option value="transactions:transfer">Transfer Antar-Dompet</option>
-            <option value="scanner">AI Scanner</option>
-            <option value="settings">Pengaturan</option>
-          </select>
+        {/* Di HP tombol keluar sudah ada di dalam drawer sidebar */}
+        <div className="hidden sm:block">
+          <Button variant="outline" size="icon" onClick={onSignOut} aria-label="Keluar" title="Keluar" className="h-10 w-10 rounded-full border-border bg-card text-foreground">
+            <LogOut className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </header>
