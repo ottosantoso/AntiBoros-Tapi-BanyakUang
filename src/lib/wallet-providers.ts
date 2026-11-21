@@ -40,3 +40,11 @@ export const EWALLET_PROVIDERS: WalletProvider[] = [
 
 /** Kode untuk dompet yang tidak ada di daftar (pilihan "Lainnya"). */
 export const OTHER_PROVIDER_CODE = 'LAINNYA';
+
+const ALL_PROVIDERS = [...BANK_PROVIDERS, ...EWALLET_PROVIDERS];
+
+/** Logo katalog untuk kode provider tersimpan, atau null jika tidak ada. */
+export function providerLogo(code: string): string | null {
+  const key = code.toUpperCase().replace(/[\s-]/g, '');
+  return ALL_PROVIDERS.find((p) => p.code === key)?.logo ?? null;
+}
