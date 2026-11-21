@@ -57,6 +57,17 @@ function formatRupiahInput(raw: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
+/**
+ * Nama untuk dompet lama yang diarsip saat namanya dipakai dompet baru.
+ * Format: [nama]_[waktu dibuat dalam WIB], mis. BCA_2026-11-21_1432.
+ */
+function namaArsipUntuk(match: WalletNameMatch): string {
+  if (!match.createdAt) return `${match.nama}_arsip`;
+  const wib = new Date(match.createdAt).toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' });
+  const stamp = wib.replace(' ', '_').replace(':', '');
+  return `${match.nama}_${stamp}`.slice(0, 80);
+}
+
 type LogoResult = { ok: true; url: string | null } | { ok: false };
 
 export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: AddWalletSheetProps) {
@@ -249,16 +260,15 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     }
   }
 
-  /** Pilihan 2: dompet arsip tetap di arsip dengan sisanya, lalu buat dompet baru dengan saldo yang diinput. */
+  /** Pilihan 2: dompet lama diganti nama dan diarsip dengan sisanya, lalu dompet baru dibuat dengan saldo yang diinput. */
   async function mulaiBaru() {
     if (!konflik) return;
     const namaFinal = nama.trim();
     const { arsip, saldoBaru } = konflik;
     setSaving(true);
     try {
-      const tgl = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-      const namaArsip = `${arsip.nama} (arsip ${tgl})`;
-      const ren = await renameWalletRow(arsip.id, namaArsip);
+      const namaLama = namaArsipUntuk(arsip);
+      const ren = await renameWalletRow(arsip.id, namaLama);
       if (!ren.success) {
         toast.error('Gagal menyiapkan dompet arsip', { description: ren.error ?? undefined });
         return;
@@ -431,7 +441,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
                   <span className="flex flex-col items-start">
                     <span className="text-sm font-semibold">Mulai baru dengan {formatIDR(konflik.saldoBaru)}</span>
                     <span className="text-[11px] font-normal text-muted-foreground">
-                      Dompet lama tetap di arsip dengan sisa saldonya dan diberi nama baru.
+                      Dompet lama diganti nama jadi {namaArsipUntuk(konflik.arsip)} dan tetap di arsip.
                     </span>
                   </span>
                 </Button>
