@@ -139,6 +139,13 @@ export interface ScanRow {
   kategori: string;
 }
 
+/** Satu baris barang/menu di struk, termasuk service & pajak. */
+export interface ScanItem {
+  nama: string;
+  nominal: number;
+  kategori: string;
+}
+
 /** Result for a receipt (struk) scan. */
 export interface ScanReceipt {
   imageType: 'struk';
@@ -147,6 +154,8 @@ export interface ScanReceipt {
   tanggal: string;
   kategori: string;
   jenis: TransactionType;
+  /** Rincian per barang. Kosong kalau AI tidak bisa membaca rinciannya. */
+  items: ScanItem[];
 }
 
 /** Result for a bank-statement (mutasi) scan. */

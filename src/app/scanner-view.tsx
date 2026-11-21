@@ -40,6 +40,7 @@ import {
 } from '@/lib/data';
 import type {
   ImageType,
+  ScanItem,
   ScanResult,
   ScanRow,
   TransactionType,
@@ -47,6 +48,12 @@ import type {
 } from '@/lib/types';
 
 type Phase = 'upload' | 'scanning' | 'review';
+
+/** Satu barang di struk yang bisa dicentang sebelum disimpan. */
+interface StrukItem extends ScanItem {
+  id: number;
+  selected: boolean;
+}
 
 interface Props {
   wallets: Wallet[];
@@ -73,6 +80,8 @@ export function ScannerView({ wallets, onSaved }: Props) {
   });
   // Mutasi review state
   const [rows, setRows] = useState<ScanRow[]>([]);
+  // Rincian barang struk (bisa dicentang per item)
+  const [strukItems, setStrukItems] = useState<StrukItem[]>([]);
   const [subkategoriList, setSubkategoriList] = useState<Subkategori[]>([]);
 
   useEffect(() => {
@@ -121,6 +130,7 @@ export function ScannerView({ wallets, onSaved }: Props) {
       jenis: 'Pengeluaran',
     });
     setRows([]);
+    setStrukItems([]);
   }
 
   function applyResult(data: ScanResult) {
@@ -133,6 +143,10 @@ export function ScannerView({ wallets, onSaved }: Props) {
         kategori: data.kategori,
         jenis: data.jenis,
       });
+      // Kalau AI membaca rincian barang, pakai daftar item yang bisa dipilih.
+      setStrukItems(
+        (data.items ?? []).map((it, i) => ({ ...it, id: i, selected: true })),
+      );
     } else {
       setRows(data.transaksi.length ? data.transaksi : []);
     }
@@ -159,6 +173,14 @@ export function ScannerView({ wallets, onSaved }: Props) {
     }
   }
 
+  /* ---------- struk item helpers ---------- */
+  function updateStrukItem(id: number, patch: Partial<StrukItem>) {
+    setStrukItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+  }
+  function setAllStrukItems(selected: boolean) {
+    setStrukItems((prev) => prev.map((it) => ({ ...it, selected })));
+  }
+
   /* ---------- mutasi row helpers ---------- */
   function updateRow(idx: number, patch: Partial<ScanRow>) {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
@@ -176,6 +198,8 @@ export function ScannerView({ wallets, onSaved }: Props) {
   const receiptNumeric = Number(receipt.nominal.replace(/[^0-9]/g, '')) || 0;
   const receiptValid =
     receipt.deskripsi.trim().length > 0 && receiptNumeric > 0 && receiptWallet.length > 0;
+  const strukSelected = strukItems.filter((it) => it.selected && it.nominal > 0 && it.nama.trim().length > 0);
+  const strukItemsValid = strukSelected.length > 0 && receiptWallet.length > 0;
   const validRows = rows.filter(
     (r) => r.deskripsi.trim().length > 0 && r.nominal > 0,
   );
@@ -189,7 +213,32 @@ export function ScannerView({ wallets, onSaved }: Props) {
     // Pilihan dompet disimpan sebagai nama; tabel transactions memakai wallet_id.
     const idDompet = (nama: string) => wallets.find((w) => w.nama === nama)?.id ?? '';
 
-    if (result?.imageType === 'struk') {
+    if (result?.imageType === 'struk' && strukItems.length > 0) {
+      // Simpan hanya barang yang dicentang; satu transaksi per barang.
+      const walletId = idDompet(receiptWallet);
+      if (!strukItemsValid || !walletId) {
+        setSaving(false);
+        toast.error('Tidak ada item dipilih', { description: 'Centang minimal satu barang dan pilih dompet.' });
+        return;
+      }
+      const r = await insertTransactions(
+        strukSelected.map((it) => {
+          const sub = matchSubkategori(subkategoriList, it.kategori, receipt.jenis);
+          return {
+            tanggal: receipt.tanggal,
+            deskripsi: it.nama.trim(),
+            tipe: receipt.jenis,
+            nominal: it.nominal,
+            walletId,
+            kategori: sub?.kategori ?? it.kategori,
+            subkategoriId: sub?.id ?? null,
+          };
+        }),
+      );
+      ok = r.saved;
+      fail = strukSelected.length - r.saved;
+      if (!r.success) toast.error('Gagal menyimpan', { description: r.error ?? undefined });
+    } else if (result?.imageType === 'struk') {
       const walletId = idDompet(receiptWallet);
       if (!receiptValid || !walletId) {
         setSaving(false);
@@ -395,7 +444,22 @@ export function ScannerView({ wallets, onSaved }: Props) {
             </Button>
           </Card>
 
-          {result.imageType === 'struk' ? (
+          {result.imageType === 'struk' && strukItems.length > 0 ? (
+            <StrukItemsReview
+              items={strukItems}
+              total={result.nominal}
+              tanggal={receipt.tanggal}
+              jenis={receipt.jenis}
+              onTanggalChange={(tanggal) => setReceipt((prev) => ({ ...prev, tanggal }))}
+              onJenisChange={(jenis) => setReceipt((prev) => ({ ...prev, jenis }))}
+              wallets={wallets}
+              wallet={receiptWallet}
+              onWalletChange={setReceiptWallet}
+              onToggle={(id, selected) => updateStrukItem(id, { selected })}
+              onUpdate={updateStrukItem}
+              onSelectAll={setAllStrukItems}
+            />
+          ) : result.imageType === 'struk' ? (
             <ReceiptReview
               receipt={receipt}
               onChange={setReceipt}
@@ -416,10 +480,14 @@ export function ScannerView({ wallets, onSaved }: Props) {
             />
           )}
 
-          <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-border bg-background/90 p-3 shadow-lg backdrop-blur-xl">
+          <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-background/90 p-3 shadow-lg backdrop-blur-xl">
             <div className="text-sm text-muted-foreground">
               {result.imageType === 'struk' ? (
-                <>1 transaksi siap disimpan</>
+                strukItems.length > 0 ? (
+                  <>{strukSelected.length} dari {strukItems.length} item dipilih</>
+                ) : (
+                  <>1 transaksi siap disimpan</>
+                )
               ) : (
                 <>{validRows.length} dari {rows.length} baris valid</>
               )}
@@ -432,7 +500,11 @@ export function ScannerView({ wallets, onSaved }: Props) {
                 onClick={handleSave}
                 disabled={
                   saving ||
-                  (result.imageType === 'struk' ? !receiptValid : !mutasiValid)
+                  (result.imageType === 'struk'
+                    ? strukItems.length > 0
+                      ? !strukItemsValid
+                      : !receiptValid
+                    : !mutasiValid)
                 }
                 className="gap-2"
               >
@@ -594,6 +666,144 @@ function TypeToggle({
         <ArrowDownLeft className="h-4 w-4" /> Masuk
       </button>
     </div>
+  );
+}
+
+function StrukItemsReview({
+  items,
+  total,
+  tanggal,
+  jenis,
+  onTanggalChange,
+  onJenisChange,
+  wallets,
+  wallet,
+  onWalletChange,
+  onToggle,
+  onUpdate,
+  onSelectAll,
+}: {
+  items: StrukItem[];
+  total: number;
+  tanggal: string;
+  jenis: TransactionType;
+  onTanggalChange: (t: string) => void;
+  onJenisChange: (j: TransactionType) => void;
+  wallets: Wallet[];
+  wallet: string;
+  onWalletChange: (w: string) => void;
+  onToggle: (id: number, selected: boolean) => void;
+  onUpdate: (id: number, patch: Partial<StrukItem>) => void;
+  onSelectAll: (selected: boolean) => void;
+}) {
+  const selected = items.filter((it) => it.selected);
+  const selectedTotal = selected.reduce((s, it) => s + it.nominal, 0);
+  const allSelected = selected.length === items.length;
+  // Hanya beri peringatan saat semua item dicentang, karena selisih wajar kalau ada item yang tidak dipilih.
+  const mismatch = allSelected && total > 0 && selectedTotal !== total;
+
+  return (
+    <Card className="space-y-5 p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <ReceiptText className="h-5 w-5 text-primary" />
+        <h3 className="font-display text-base font-bold tracking-tight">Rincian Struk</h3>
+        <span className="ml-auto text-xs text-muted-foreground">AI-extracted · centang yang mau disimpan</span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label>Tanggal</Label>
+          <Input type="date" value={tanggal} onChange={(e) => onTanggalChange(e.target.value)} />
+        </div>
+        <div className="space-y-2">
+          <Label>Dompet</Label>
+          <Select value={wallet} onValueChange={onWalletChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Pilih dompet" />
+            </SelectTrigger>
+            <SelectContent>
+              {wallets.length === 0 ? (
+                <SelectItem value="_none" disabled>Belum ada dompet</SelectItem>
+              ) : (
+                wallets.map((w) => (
+                  <SelectItem key={w.nama} value={w.nama}>{w.nama}</SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label>Jenis</Label>
+          <TypeToggle value={jenis} onChange={onJenisChange} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">{selected.length} dari {items.length}</span> item dipilih
+        </p>
+        <Button variant="outline" size="sm" onClick={() => onSelectAll(!allSelected)}>
+          {allSelected ? 'Kosongkan pilihan' : 'Pilih semua'}
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {items.map((it) => (
+          <div
+            key={it.id}
+            className={cn(
+              'flex items-start gap-3 rounded-xl border p-3 transition-colors',
+              it.selected ? 'border-primary/40 bg-primary/5' : 'border-border bg-card/60 opacity-70',
+            )}
+          >
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={it.selected}
+              aria-label={`Pilih ${it.nama}`}
+              onClick={() => onToggle(it.id, !it.selected)}
+              className={cn(
+                'mt-1.5 grid h-6 w-6 shrink-0 place-items-center rounded-md border-2 transition-colors',
+                it.selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/40 bg-background',
+              )}
+            >
+              {it.selected && <Check className="h-4 w-4" strokeWidth={3} />}
+            </button>
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-12">
+              <div className="min-w-0 sm:col-span-7">
+                <Input
+                  value={it.nama}
+                  onChange={(e) => onUpdate(it.id, { nama: e.target.value })}
+                  placeholder="Nama barang"
+                />
+              </div>
+              <div className="sm:col-span-5">
+                <NominalInput
+                  value={String(it.nominal)}
+                  onChange={(raw) => onUpdate(it.id, { nominal: Number(raw) || 0 })}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-1.5 rounded-xl bg-muted/60 p-4 text-sm">
+        <div className="flex justify-between gap-3">
+          <span className="text-muted-foreground">Dipilih</span>
+          <span className="font-bold tnum">{formatIDR(selectedTotal)}</span>
+        </div>
+        <div className="flex justify-between gap-3">
+          <span className="text-muted-foreground">Total di struk</span>
+          <span className="font-semibold tnum">{formatIDR(total)}</span>
+        </div>
+        {mismatch && (
+          <p className="pt-2 text-xs font-medium text-amber-600 dark:text-amber-400">
+            Jumlah item berbeda {formatIDR(Math.abs(selectedTotal - total))} dari total struk. Periksa apakah ada barang atau biaya yang belum terbaca.
+          </p>
+        )}
+      </div>
+    </Card>
   );
 }
 

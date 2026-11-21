@@ -205,6 +205,15 @@ function toISODateVal(v: unknown): string {
 function normaliseScanResult(raw: ScanResult, imageType: 'struk' | 'mutasi'): ScanResult {
   if (imageType === 'struk') {
     const r = raw as Partial<ScanReceipt>;
+    const items = Array.isArray(r.items)
+      ? r.items
+          .map((it) => ({
+            nama: toString(it?.nama, 'Barang'),
+            nominal: toNumber(it?.nominal),
+            kategori: toString(it?.kategori, 'Lainnya'),
+          }))
+          .filter((it) => it.nominal > 0)
+      : [];
     return {
       imageType: 'struk',
       nominal: toNumber(r.nominal),
@@ -212,6 +221,7 @@ function normaliseScanResult(raw: ScanResult, imageType: 'struk' | 'mutasi'): Sc
       tanggal: toISODateVal(r.tanggal),
       kategori: toString(r.kategori, 'Lainnya'),
       jenis: toTransactionType(r.jenis),
+      items,
     } satisfies ScanReceipt;
   }
   const m = raw as Partial<ScanMutasi>;
