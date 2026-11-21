@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" role="img" aria-labelledby="title desc">
+<title id="title">BNI</title>
+<desc id="desc">Stylized editable wallet-provider logo placeholder for UI mockups; not official brand artwork.</desc>
+<rect width="480" height="160" rx="18" fill="#FFFFFF"/>
+<g><path d="M42 48 L74 32 L106 48 L106 99 L42 99 Z" fill="none" stroke="#F36F21" stroke-width="9"/><path d="M42 65 H106" stroke="#F36F21" stroke-width="9"/></g>
+<text x="140" y="96" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#0072BC">BNI</text>
+</svg>
