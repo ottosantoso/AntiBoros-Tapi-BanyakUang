@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" role="img" aria-labelledby="title desc">
+<title id="title">Danamon</title>
+<desc id="desc">Stylized editable wallet-provider logo placeholder for UI mockups; not official brand artwork.</desc>
+<rect width="480" height="160" rx="18" fill="#FFFFFF"/>
+<g><path d="M42 45 L73 28 L104 45 L104 96 L73 113 L42 96 Z" fill="none" stroke="#007C68" stroke-width="9"/><path d="M56 57 L90 85 M90 57 L56 85" stroke="#F6A623" stroke-width="7"/></g>
+<text x="140" y="96" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#007C68">Danamon</text>
+</svg>
