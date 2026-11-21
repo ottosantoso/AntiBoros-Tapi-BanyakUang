@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TransactionList } from '@/components/transaction-list';
+import { GRID_COLS_WITH_ACTIONS, TransactionList } from '@/components/transaction-list';
 import { cn } from '@/lib/utils';
 import { formatIDR } from '@/lib/format';
 
@@ -237,7 +237,7 @@ export function TransactionsView({
               <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]"><ListFilter className="h-5 w-5" /></span><div><h2 className="font-display text-base font-extrabold tracking-[-0.02em] text-[#172554]">Riwayat Transaksi</h2><p className="text-xs font-medium text-[#5b6f99]">{loading ? 'Memuat transaksi...' : `${filtered.length} transaksi ditemukan`}</p></div></div>
               {!loading && filtered.length > 0 && <span className="hidden rounded-full bg-[#eff6ff] px-3 py-1.5 text-xs font-extrabold text-[#2563eb] sm:inline-flex">Terbaru</span>}
             </div>
-            {loading ? <TransactionList transactions={filtered} loading limit={5} /> : filtered.length ? <div className="overflow-x-auto"><div className="min-w-[680px]"><div className="grid grid-cols-[minmax(86px,1fr)_minmax(130px,1.5fr)_minmax(105px,1fr)_auto] gap-3 border-b border-[#dbeafe] pb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#5b6f99]"><span>Tanggal</span><span>Keterangan</span><span>Kategori</span><span className="text-right">Nominal</span></div><TransactionList transactions={filtered} limit={10} onSelect={openEdit} /></div></div> : <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => openCreate(defaultTab)} actionLabel={actions[0].label} />}
+            {loading ? <TransactionList transactions={filtered} loading limit={5} /> : filtered.length ? <div className="overflow-x-auto"><div className="min-w-[760px]"><div className={cn('grid gap-3 border-b border-[#dbeafe] pb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#5b6f99]', GRID_COLS_WITH_ACTIONS)}><span>Tanggal</span><span>Keterangan</span><span>Kategori</span><span className="text-right">Nominal</span><span className="text-right">Aksi</span></div><TransactionList transactions={filtered} limit={10} onEdit={openEdit} onDelete={handleDelete} /></div></div> : <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => openCreate(defaultTab)} actionLabel={actions[0].label} />}
           </Card>
         </>
       )}
