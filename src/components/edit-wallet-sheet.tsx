@@ -22,7 +22,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  fetchSubkategori,
   insertTransaction,
+  matchSubkategori,
   uploadWalletLogo,
   type WalletEditInput,
   type WriteResult,
@@ -173,13 +175,16 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
       // sehingga trigger saldo dan riwayat tetap sinkron.
       const selisih = saldoBaru - wallet.saldo;
       if (selisih !== 0) {
+        const tipeAdj = (selisih > 0 ? 'Pemasukan' : 'Pengeluaran') as TransactionType;
+        const sub = matchSubkategori(await fetchSubkategori(), 'Penyesuaian Saldo', tipeAdj);
         const adj = await insertTransaction({
           tanggal: tanggalHariIni(),
           deskripsi: 'Penyesuaian saldo',
-          tipe: (selisih > 0 ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+          tipe: tipeAdj,
           nominal: Math.abs(selisih),
           walletId: wallet.id,
-          kategori: 'Penyesuaian Saldo',
+          kategori: sub?.kategori ?? 'Penyesuaian Saldo',
+          subkategoriId: sub?.id ?? null,
         });
         if (!adj.success) {
           toast.error('Data dompet tersimpan, tetapi saldo belum diubah', { description: adj.error ?? undefined });

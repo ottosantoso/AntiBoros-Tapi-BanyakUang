@@ -23,6 +23,10 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { toISODate, formatIDR } from '@/lib/format';
 import type { Transaction, TransactionType, Wallet } from '@/lib/types';
+import { fetchSubkategori, type Subkategori } from '@/lib/data';
+
+/** Subkategori sistem tidak dipilih manual: dicatat otomatis oleh aplikasi/trigger. */
+const SYSTEM_SUBKATEGORI = new Set(['Penyesuaian Saldo', 'Biaya Admin']);
 
 export type SheetTab = TransactionType | 'Transfer';
 
@@ -51,6 +55,7 @@ export interface TxActions {
     nominal: number;
     walletId: string;
     kategori?: string;
+    subkategoriId?: string | null;
     berulang?: boolean;
   }) => Promise<{ success: boolean; error: string | null }>;
   editTransaction: (
@@ -62,6 +67,7 @@ export interface TxActions {
       nominal?: number;
       walletId?: string;
       kategori?: string;
+      subkategoriId?: string | null;
       berulang?: boolean;
     },
   ) => Promise<{ success: boolean; error: string | null }>;
@@ -95,6 +101,8 @@ export function AddTransactionSheet({
   const [nominal, setNominal] = useState('');
   const [dompet, setDompet] = useState('');
   const [berulang, setBerulang] = useState(false);
+  const [subkategoriList, setSubkategoriList] = useState<Subkategori[]>([]);
+  const [subkategoriId, setSubkategoriId] = useState('');
 
   // Transfer state
   const [fromWallet, setFromWallet] = useState('');
@@ -113,12 +121,14 @@ export function AddTransactionSheet({
       setNominal(String(editing.nominal));
       setDompet(editing.walletId ?? wallets[0]?.id ?? '');
       setBerulang(editing.berulang ?? false);
+      setSubkategoriId(editing.subkategoriId ?? '');
     } else {
       setTab(initialTab);
       setTanggal(toISODate());
       setDeskripsi('');
       setNominal('');
       setBerulang(false);
+      setSubkategoriId('');
       setDompet(wallets[0]?.id ?? '');
       setFromWallet(wallets[0]?.id ?? '');
       setToWallet(wallets[1]?.id ?? '');
@@ -144,12 +154,37 @@ export function AddTransactionSheet({
     isTransfer &&
     (!fromWallet || !toWallet || fromWallet === toWallet || numeric <= 0 || numeric + adminNumeric > (fromSelected?.saldo ?? 0));
 
-  const category = isTransfer ? 'Transfer' : guessCategory(deskripsi, tab);
+  // Daftar subkategori dari database, sesuai jenis transaksi tab aktif.
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    fetchSubkategori().then((list) => {
+      if (active) setSubkategoriList(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
+  const subOptions = useMemo(
+    () => subkategoriList.filter((s) => s.jenis === tab && !SYSTEM_SUBKATEGORI.has(s.nama)),
+    [subkategoriList, tab],
+  );
+  // Saran dari deskripsi. Dipakai sebagai pilihan awal kalau user belum memilih manual.
+  const suggested = guessCategory(deskripsi, tab as TransactionType);
+  const effectiveSubId =
+    subOptions.find((s) => s.id === subkategoriId)?.id ??
+    subOptions.find((s) => s.kategori === suggested)?.id ??
+    subOptions[0]?.id ??
+    '';
+  const selectedSub = subOptions.find((s) => s.id === effectiveSubId);
+
+  const category = isTransfer ? 'Transfer' : (selectedSub?.kategori ?? suggested);
   const valid = editing
-    ? numeric > 0 && dompet.length > 0 && !insufficientBalance
+    ? numeric > 0 && dompet.length > 0 && !insufficientBalance && Boolean(effectiveSubId)
     : isTransfer
       ? !invalidTransfer
-      : deskripsi.trim().length > 0 && numeric > 0 && dompet.length > 0 && !insufficientBalance;
+      : deskripsi.trim().length > 0 && numeric > 0 && dompet.length > 0 && !insufficientBalance && Boolean(effectiveSubId);
 
   // Peringatan duplikat: transaksi dengan tanggal, deskripsi, nominal, dan dompet yang sama.
   const possibleDuplicate = useMemo(() => {
@@ -173,6 +208,7 @@ export function AddTransactionSheet({
         nominal: numeric,
         walletId: dompet,
         kategori: category,
+        subkategoriId: effectiveSubId || null,
         berulang,
       });
     } else if (isTransfer) {
@@ -192,6 +228,7 @@ export function AddTransactionSheet({
         nominal: numeric,
         walletId: dompet,
         kategori: category,
+        subkategoriId: effectiveSubId || null,
         berulang,
       });
     }
@@ -317,8 +354,20 @@ export function AddTransactionSheet({
                 <div className="space-y-2">
                   <Label htmlFor="tx-desc" className="text-sm font-extrabold text-foreground">Deskripsi</Label>
                   <Input id="tx-desc" placeholder="cth. Belanja bulanan, Gaji, Kopi..." value={deskripsi} onChange={(e) => setDeskripsi(e.target.value)} maxLength={80} className="h-11 rounded-xl border-border bg-card font-medium text-foreground placeholder:text-muted-foreground" required />
+                  <Label htmlFor="tx-sub" className="text-sm font-extrabold text-foreground">Subkategori</Label>
+                  <select
+                    id="tx-sub"
+                    value={effectiveSubId}
+                    onChange={(e) => setSubkategoriId(e.target.value)}
+                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground"
+                  >
+                    {subOptions.length === 0 && <option value="">Belum ada subkategori</option>}
+                    {subOptions.map((s) => (
+                      <option key={s.id} value={s.id}>{s.nama} ({s.kategori})</option>
+                    ))}
+                  </select>
                   <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs font-bold text-primary">
-                    <Tags className="h-3.5 w-3.5" />Kategori otomatis: <span>{category}</span>
+                    <Tags className="h-3.5 w-3.5" />Saran dari deskripsi: <span>{suggested}</span>
                   </div>
                 </div>
 

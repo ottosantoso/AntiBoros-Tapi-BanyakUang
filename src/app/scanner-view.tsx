@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import {
   ScanLine,
@@ -31,7 +31,13 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatIDR, toISODate } from '@/lib/format';
 import { scanImage, hasApiUrl } from '@/lib/api';
-import { insertTransaction, insertTransactions } from '@/lib/data';
+import {
+  fetchSubkategori,
+  insertTransaction,
+  insertTransactions,
+  matchSubkategori,
+  type Subkategori,
+} from '@/lib/data';
 import type {
   ImageType,
   ScanResult,
@@ -67,6 +73,11 @@ export function ScannerView({ wallets, onSaved }: Props) {
   });
   // Mutasi review state
   const [rows, setRows] = useState<ScanRow[]>([]);
+  const [subkategoriList, setSubkategoriList] = useState<Subkategori[]>([]);
+
+  useEffect(() => {
+    fetchSubkategori().then(setSubkategoriList);
+  }, []);
   const [rowWallet, setRowWallet] = useState(wallets[0]?.nama ?? '');
   const [receiptWallet, setReceiptWallet] = useState(wallets[0]?.nama ?? '');
 
@@ -189,13 +200,16 @@ export function ScannerView({ wallets, onSaved }: Props) {
         toast.error('Data belum lengkap', { description: 'Periksa deskripsi, nominal, dan dompet.' });
         return;
       }
+      // Kategori teks dari AI dipetakan ke subkategori yang ada (fallback 'Lain-lain').
+      const sub = matchSubkategori(subkategoriList, receipt.kategori, receipt.jenis);
       const r = await insertTransaction({
         tanggal: receipt.tanggal,
         deskripsi: receipt.deskripsi.trim(),
         tipe: receipt.jenis,
         nominal: receiptNumeric,
         walletId,
-        kategori: receipt.kategori,
+        kategori: sub?.kategori ?? receipt.kategori,
+        subkategoriId: sub?.id ?? null,
       });
       if (r.success) ok += 1;
       else fail += 1;
@@ -208,14 +222,18 @@ export function ScannerView({ wallets, onSaved }: Props) {
       }
       // Satu insert untuk seluruh baris mutasi, supaya tidak parsial per baris.
       const r = await insertTransactions(
-        validRows.map((row) => ({
-          tanggal: row.tanggal,
-          deskripsi: row.deskripsi.trim(),
-          tipe: row.jenis,
-          nominal: row.nominal,
-          walletId,
-          kategori: row.kategori,
-        })),
+        validRows.map((row) => {
+          const sub = matchSubkategori(subkategoriList, row.kategori, row.jenis);
+          return {
+            tanggal: row.tanggal,
+            deskripsi: row.deskripsi.trim(),
+            tipe: row.jenis,
+            nominal: row.nominal,
+            walletId,
+            kategori: sub?.kategori ?? row.kategori,
+            subkategoriId: sub?.id ?? null,
+          };
+        }),
       );
       ok = r.saved;
       fail = validRows.length - r.saved;
