@@ -1,4 +1,5 @@
 import type { DashboardData, NewTransaction, ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType } from './types';
+import { supabase, supabaseConfigured } from './supabase-client';
 
 const LS_KEY = 'hepeng.appsScriptUrl';
 
@@ -144,42 +145,29 @@ export interface ScanResponseResult {
  * so Apps Script receives the body without a CORS preflight.
  */
 export async function scanImage(payload: ScanPayload): Promise<ScanResponseResult> {
-  const base = getApiUrl();
-  if (!base) return { success: false, data: null, error: 'URL Apps Script belum diset.' };
+  if (!supabaseConfigured) {
+    return { success: false, data: null, error: 'Koneksi Supabase belum diatur.' };
+  }
 
   try {
-    const res = await fetch(base, {
-      method: 'POST',
-      redirect: 'follow',
-      body: JSON.stringify(payload),
+    const { data, error } = await supabase.functions.invoke<{
+      status?: string;
+      data?: ScanResult;
+      message?: string;
+    }>('scan-image', {
+      body: { imageType: payload.imageType, imageBase64: payload.imageBase64 },
     });
-    if (!res.ok) {
-      return { success: false, data: null, error: `Server merespons ${res.status} ${res.statusText}` };
+
+    if (error) {
+      return { success: false, data: null, error: `Gagal memindai: ${error.message}` };
     }
-    const text = await res.text();
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch {
-          return { success: false, data: null, error: 'Respons server bukan JSON valid.' };
-        }
-      } else {
-        return { success: false, data: null, error: 'Respons server bukan JSON valid.' };
-      }
-    }
-    const env = parsed as { status?: string; data?: ScanResult; message?: string };
-    if (env.status === 'success' && env.data) {
-      return { success: true, data: normaliseScanResult(env.data, payload.imageType), error: null };
+    if (data?.status === 'success' && data.data) {
+      return { success: true, data: normaliseScanResult(data.data, payload.imageType), error: null };
     }
     return {
       success: false,
       data: null,
-      error: env.message ?? 'AI tidak dapat membaca dokumen ini. Coba foto lain.',
+      error: data?.message ?? 'AI tidak dapat membaca dokumen ini. Coba foto lain.',
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Gagal terhubung ke server.';

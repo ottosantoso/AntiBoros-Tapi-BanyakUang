@@ -30,7 +30,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatIDR, toISODate } from '@/lib/format';
-import { scanImage, hasApiUrl } from '@/lib/api';
+import { scanImage } from '@/lib/api';
 import {
   fetchSubkategori,
   insertTransaction,
@@ -142,10 +142,6 @@ export function ScannerView({ wallets, onSaved }: Props) {
   async function handleScan() {
     if (!base64) {
       setError('Unggah gambar terlebih dahulu.');
-      return;
-    }
-    if (!hasApiUrl()) {
-      setError('URL Apps Script belum diatur. Buka Pengaturan untuk menghubungkan.');
       return;
     }
     setError(null);
@@ -273,13 +269,6 @@ export function ScannerView({ wallets, onSaved }: Props) {
         </div>
       </Card>
 
-      {!hasApiUrl() && (
-        <div className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">
-          <Sparkles className="h-4 w-4 shrink-0" />
-          <span>Hubungkan Google Apps Script di Pengaturan untuk mulai memindai.</span>
-        </div>
-      )}
-
       {error && (
         <div className="flex items-start justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <span>{error}</span>
@@ -354,7 +343,7 @@ export function ScannerView({ wallets, onSaved }: Props) {
                   . Klik tombol di bawah untuk memulai analisis AI.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={handleScan} className="gap-2" disabled={!hasApiUrl()}>
+                  <Button onClick={handleScan} className="gap-2">
                     <Sparkles className="h-4 w-4" /> Pindai dengan AI
                   </Button>
                   <Button variant="outline" onClick={reset} className="gap-2">
