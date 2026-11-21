@@ -362,7 +362,15 @@ export async function insertWallet(input: WalletInput): Promise<WriteResult> {
   return { success: true, error: null };
 }
 
-export async function updateWalletRow(id: string, input: WalletInput): Promise<WriteResult> {
+/** Field yang boleh diubah dari menu edit. Saldo sengaja tidak ikut: saldo hanya berubah lewat transaksi dan transfer. */
+export interface WalletEditInput {
+  nama: string;
+  provider: string;
+  jenis: Wallet['jenis'];
+  logo_url: string | null;
+}
+
+export async function updateWalletRow(id: string, input: WalletEditInput): Promise<WriteResult> {
   const { error } = await supabase.from('wallets').update(input).eq('id', id);
   if (error) return { success: false, error: error.message };
   return { success: true, error: null };

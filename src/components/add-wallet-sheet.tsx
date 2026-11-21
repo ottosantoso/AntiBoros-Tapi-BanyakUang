@@ -22,6 +22,7 @@ import {
   type WriteResult,
 } from '@/lib/data';
 import { formatIDR } from '@/lib/format';
+import { normalizeLogo } from '@/lib/logo';
 import {
   BANK_PROVIDERS,
   EWALLET_PROVIDERS,
@@ -144,7 +145,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     setSaldoAwal(formatRupiahInput(e.target.value));
   }
 
-  function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
+  async function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     e.target.value = '';
     if (!file) return;
@@ -156,7 +157,8 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
       toast.error('Ukuran logo maksimal 2 MB');
       return;
     }
-    setLogoFile(file);
+    // Logo disesuaikan otomatis (dipotong dan dipusatkan di kanvas 480×160) sebelum dipakai.
+    setLogoFile(await normalizeLogo(file));
   }
 
   /** Unggah logo hanya untuk pilihan "Lainnya" dan bila ada file. */
@@ -356,9 +358,9 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
                 Logo Dompet <span className="font-normal normal-case">(opsional)</span>
               </Label>
               <div className="flex items-center gap-3">
-                <div className="grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted">
+                <div className="grid h-20 w-44 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-white p-2">
                   {logoPreview ? (
-                    <img src={logoPreview} alt="Preview logo dompet" className="h-full w-full object-contain p-1" />
+                    <img src={logoPreview} alt="Preview logo dompet" className="h-full w-full object-contain" />
                   ) : (
                     <Upload className="h-5 w-5 text-muted-foreground" />
                   )}
