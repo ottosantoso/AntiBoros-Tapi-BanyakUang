@@ -31,7 +31,7 @@ src/
     views.ts                type View = dashboard|wallets|transactions|scanner|settings; TransactionSection (duplikat dengan types.ts)
     dashboard-view.tsx      metrik, chart arus kas, kategori, target tabungan, transaksi terbaru
     wallets-view.tsx        kartu dompet, rincian saldo, tombol arsip per dompet, bagian Dompet Diarsipkan dengan Pulihkan
-    transactions-view.tsx   ringkasan + riwayat + filter (jenis, cari, dompet, tanggal)
+    transactions-view.tsx   satu komponen untuk 4 submenu (all, income, expense, transfer). Tiap submenu punya tombol form sendiri (AddTransactionSheet dengan lockTab). Submenu Transfer menampilkan daftar transfer.
     scanner-view.tsx        upload struk/mutasi -> scan AI (Apps Script, scanImage) -> review -> simpan ke Supabase (insertTransaction / insertTransactions, dompet dipetakan dari nama ke id)
     settings-view.tsx       input URL Google Apps Script (localStorage)
     login-view.tsx          halaman masuk, daftar, dan lupa password (Supabase Auth)

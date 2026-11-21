@@ -3,7 +3,6 @@ import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/lib/theme';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
-import { AddTransactionSheet } from '@/components/add-transaction-sheet';
 import { AddWalletSheet } from '@/components/add-wallet-sheet';
 import { useDashboard } from '@/lib/use-dashboard';
 import { thisMonthRange, type DateRangeValue } from '@/lib/date-range';
@@ -47,7 +46,6 @@ function AuthGate() {
 function Workspace({ userName, userEmail }: { userName: string; userEmail: string }) {
   const [view, setView] = useState<View>('dashboard');
   const [txSection, setTxSection] = useState<TransactionSection>('all');
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [walletSheetOpen, setWalletSheetOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
   const {
@@ -61,6 +59,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
     addTransfer,
     addWallet,
     editWallet,
+    transfers,
   } = useDashboard(dateRange);
 
   const loading = status === 'loading';
@@ -70,7 +69,6 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const handleNavigate = useCallback((nextView: View, section?: TransactionSection) => {
     setView(nextView);
     if (section) setTxSection(section);
-    setSheetOpen(false);
   }, []);
 
   // Setelah keluar, useSession mengembalikan pengguna ke halaman masuk.
@@ -98,7 +96,6 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
             txSection={txSection}
             onNavigate={handleNavigate}
             onRefresh={handleRefresh}
-            onAdd={() => setSheetOpen(true)}
             onDateRangeChange={setDateRange}
             dateRange={dateRange}
             status={status}
@@ -135,7 +132,16 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                 />
               )}
               {view === 'transactions' && (
-                <TransactionsView data={data} loading={loading} onAdd={() => setSheetOpen(true)} />
+                <TransactionsView
+                  data={data}
+                  transfers={transfers}
+                  loading={loading}
+                  txSection={txSection}
+                  addTransaction={addTransaction}
+                  editTransaction={editTransaction}
+                  addTransfer={addTransfer}
+                  onChanged={handleRefresh}
+                />
               )}
               {view === 'scanner' && <ScannerView wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'settings' && <SettingsView onSaved={handleRefresh} />}
@@ -147,16 +153,6 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
           </footer>
         </div>
       </div>
-
-      <AddTransactionSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        wallets={data.dompet}
-        onSubmitted={handleRefresh}
-        addTransaction={addTransaction}
-        editTransaction={editTransaction}
-        addTransfer={addTransfer}
-      />
 
       <AddWalletSheet
         open={walletSheetOpen}
