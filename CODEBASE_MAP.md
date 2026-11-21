@@ -99,7 +99,7 @@ Yang masih tersisa:
 - PR #4: tambah dompet dengan bank, e-wallet, Lainnya, saldo awal, arsip dengan pulihkan atau mulai baru.
 - PR #5: menu ubah dompet (nama, provider, jenis, logo). Saldo diubah lewat transaksi penyesuaian. Logo unggahan dinormalisasi otomatis ke PNG 480×160. Logo resmi blu by BCA Digital ditambahkan ke katalog.
 - Sprint 2: lihat bagian di atas.
-- Sprint 3 (branch `feat/sprint-3-edit-hapus`): klik baris transaksi untuk ubah (sheet mode edit, `editTransaction`). Hapus lewat tombol Hapus di sheet edit, dengan jeda 8 detik dan tombol Urungkan. Penghapusan dijalankan setelah jeda, atau saat halaman ditutup. Peringatan duplikat dicek di sisi klien (tanggal, deskripsi, nominal, dompet) dan tidak memblokir simpan. Baris transaksi hasil transfer (`transferId`) tidak bisa diubah dari submenu Transaksi.
+- Sprint 3 (branch `feat/sprint-3-edit-hapus`): kolom Aksi di riwayat transaksi berisi tombol ubah (sheet mode edit, `editTransaction`) dan hapus. Hapus lewat tombol Hapus di sheet edit, dengan jeda 8 detik dan tombol Urungkan. Penghapusan dijalankan setelah jeda, atau saat halaman ditutup. Peringatan duplikat dicek di sisi klien (tanggal, deskripsi, nominal, dompet) dan tidak memblokir simpan. Baris transaksi hasil transfer (`transferId`) tidak bisa diubah dari submenu Transaksi.
 - Deviasi dari dokumen Sprint 3: "soft delete" di sisi klien, bukan kolom `deleted_at` di database. Tidak ada riwayat hapus, dan tidak ada `dedupe_hash`.
 
 ## Temuan kode (dari file yang sudah dibaca)
