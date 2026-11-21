@@ -57,6 +57,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
     addTransaction,
     editTransaction,
     addTransfer,
+    removeTransaction,
     addWallet,
     editWallet,
     transfers,
@@ -140,6 +141,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                   addTransaction={addTransaction}
                   editTransaction={editTransaction}
                   addTransfer={addTransfer}
+                  removeTransaction={removeTransaction}
                   onChanged={handleRefresh}
                 />
               )}
