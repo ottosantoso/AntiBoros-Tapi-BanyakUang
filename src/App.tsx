@@ -125,7 +125,12 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
 
               {view === 'dashboard' && <DashboardView data={data} loading={loading} dateRange={dateRange} />}
               {view === 'wallets' && (
-                <WalletsView data={data} loading={loading} onAddWallet={() => setWalletSheetOpen(true)} />
+                <WalletsView
+                  data={data}
+                  loading={loading}
+                  onAddWallet={() => setWalletSheetOpen(true)}
+                  onChanged={handleRefresh}
+                />
               )}
               {view === 'transactions' && (
                 <TransactionsView data={data} loading={loading} onAdd={() => setSheetOpen(true)} />
