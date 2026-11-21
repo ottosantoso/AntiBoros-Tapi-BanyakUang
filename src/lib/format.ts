@@ -4,11 +4,6 @@ const IDR = new Intl.NumberFormat('id-ID', {
   maximumFractionDigits: 0,
 });
 
-const IDR_COMPACT = new Intl.NumberFormat('id-ID', {
-  notation: 'compact',
-  compactDisplay: 'short',
-  maximumFractionDigits: 1,
-});
 
 /** Full currency, e.g. "Rp 5.250.000" */
 export function formatIDR(value: number): string {

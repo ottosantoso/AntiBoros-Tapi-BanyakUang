@@ -18,10 +18,10 @@ function apply(theme: Theme) {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return 'light';
+    if (typeof window === 'undefined') return 'dark';
     const stored = localStorage.getItem('hepeng.theme') as Theme | null;
     if (stored === 'light' || stored === 'dark') return stored;
-    return 'light';
+    return 'dark';
   });
 
   useEffect(() => {

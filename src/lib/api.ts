@@ -1,4 +1,4 @@
-import type { DashboardData, NewTransaction, ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType, AddWalletPayload, UpdateWalletPayload, DeleteWalletPayload } from './types';
+import type { DashboardData, NewTransaction, ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType } from './types';
 
 const LS_KEY = 'hepeng.appsScriptUrl';
 

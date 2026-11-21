@@ -6,7 +6,7 @@ import { Header } from '@/components/header';
 import { AddTransactionSheet } from '@/components/add-transaction-sheet';
 import { useDashboard } from '@/lib/use-dashboard';
 import { thisMonthRange, type DateRangeValue } from '@/lib/date-range';
-import type { View } from '@/app/views';
+import type { View, TransactionSection } from '@/app/views';
 import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
 import { TransactionsView } from '@/app/transactions-view';
@@ -45,17 +45,20 @@ function AuthGate() {
 
 function Workspace({ userName, userEmail }: { userName: string; userEmail: string }) {
   const [view, setView] = useState<View>('dashboard');
+  const [txSection, setTxSection] = useState<TransactionSection>('all');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
-  const { data, status, error, usingDemo, refresh } = useDashboard(dateRange);
+  const { data, status, error, usingDemo, refresh, addTransaction, editTransaction, addTransfer } =
+    useDashboard(dateRange);
 
   const loading = status === 'loading';
 
   const handleRefresh = useCallback(() => refresh(), [refresh]);
 
-  const handleNavigate = useCallback((nextView: View) => {
+  const handleNavigate = useCallback((nextView: View, section?: TransactionSection) => {
     setView(nextView);
-    setSheetOpen(nextView === 'transactions');
+    if (section) setTxSection(section);
+    setSheetOpen(false);
   }, []);
 
   // Setelah keluar, useSession mengembalikan pengguna ke halaman masuk.
@@ -69,6 +72,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
       <div className="flex min-h-screen bg-background text-foreground">
         <Sidebar
           view={view}
+          txSection={txSection}
           onNavigate={handleNavigate}
           connected={status === 'connected'}
           usingDemo={usingDemo}
@@ -79,6 +83,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
         <div className="flex min-w-0 flex-1 flex-col">
           <Header
             view={view}
+            txSection={txSection}
             onNavigate={handleNavigate}
             onRefresh={handleRefresh}
             onAdd={() => setSheetOpen(true)}
@@ -97,9 +102,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
             <div className="mx-auto max-w-[1440px] animate-fade-in">
               {error && status === 'error' && (
                 <div className="mb-4 flex flex-col gap-1 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
-                  <span>
-                    Gagal memuat data dari Google Sheets. Menampilkan data demo untuk saat ini.
-                  </span>
+                  <span>Gagal memuat data. Coba muat ulang.</span>
                   <button
                     onClick={handleRefresh}
                     className="shrink-0 text-xs font-semibold underline underline-offset-2 hover:no-underline"
@@ -111,16 +114,16 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
 
               {view === 'dashboard' && <DashboardView data={data} loading={loading} dateRange={dateRange} />}
               {view === 'wallets' && <WalletsView data={data} loading={loading} />}
-              {view === 'transactions' && <TransactionsView data={data} loading={loading} onAdd={() => setSheetOpen(true)} />}
-              {view === 'scanner' && (
-                <ScannerView wallets={data.dompet} onSaved={handleRefresh} />
+              {view === 'transactions' && (
+                <TransactionsView data={data} loading={loading} onAdd={() => setSheetOpen(true)} />
               )}
+              {view === 'scanner' && <ScannerView wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'settings' && <SettingsView onSaved={handleRefresh} />}
             </div>
           </main>
 
           <footer className="border-t border-border px-4 py-4 text-center text-xs text-muted-foreground md:px-6">
-            Hepeng History · Personal Finance Tracker · Data tersimpan di Google Sheets Anda
+            Hepeng History · Personal Finance Tracker
           </footer>
         </div>
       </div>
@@ -130,6 +133,9 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
         onOpenChange={setSheetOpen}
         wallets={data.dompet}
         onSubmitted={handleRefresh}
+        addTransaction={addTransaction}
+        editTransaction={editTransaction}
+        addTransfer={addTransfer}
       />
     </>
   );
