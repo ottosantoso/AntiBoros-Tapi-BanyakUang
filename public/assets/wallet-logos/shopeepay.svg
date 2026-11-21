@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" role="img" aria-labelledby="title desc">
+<title id="title">ShopeePay</title>
+<desc id="desc">Stylized editable wallet-provider logo placeholder for UI mockups; not official brand artwork.</desc>
+<rect width="480" height="160" rx="18" fill="#FFFFFF"/>
+<g><path d="M48 54 H98 L105 105 H41 Z" fill="none" stroke="#EE4D2D" stroke-width="9" stroke-linejoin="round"/><path d="M59 55 Q59 35 73 35 Q87 35 87 55" fill="none" stroke="#EE4D2D" stroke-width="8"/></g>
+<text x="140" y="96" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="700" fill="#EE4D2D">ShopeePay</text>
+</svg>
