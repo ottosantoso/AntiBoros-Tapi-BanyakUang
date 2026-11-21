@@ -39,10 +39,11 @@ function AuthGate() {
     );
   }
   if (!session) return <LoginView />;
-  return <Workspace userEmail={session.user.email ?? ''} />;
+  const userName = (session.user.user_metadata?.name as string | undefined) ?? '';
+  return <Workspace userName={userName} userEmail={session.user.email ?? ''} />;
 }
 
-function Workspace({ userEmail }: { userEmail: string }) {
+function Workspace({ userName, userEmail }: { userName: string; userEmail: string }) {
   const [view, setView] = useState<View>('dashboard');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
@@ -88,6 +89,8 @@ function Workspace({ userEmail }: { userEmail: string }) {
             refreshing={loading}
             showDateRange={view === 'dashboard' || view === 'transactions'}
             onSignOut={handleSignOut}
+            userName={userName}
+            userEmail={userEmail}
           />
 
           <main className="flex-1 px-4 py-5 md:px-6 md:py-6">

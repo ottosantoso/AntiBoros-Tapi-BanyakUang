@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, ChevronDown, LayoutDashboard, LogOut, Plus, RefreshCw, ScanLine, Settings, UserRound, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Bell, CheckCircle2, ChevronDown, LayoutDashboard, LogOut, Plus, RefreshCw, ScanLine, Settings, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Logo } from '@/components/logo';
@@ -19,6 +19,8 @@ export function Header({
   refreshing,
   showDateRange,
   onSignOut,
+  userName,
+  userEmail,
 }: {
   view: View;
   onNavigate: (v: View) => void;
@@ -31,6 +33,8 @@ export function Header({
   refreshing: boolean;
   showDateRange?: boolean;
   onSignOut: () => void;
+  userName: string;
+  userEmail: string;
 }) {
   const titleMap: Record<View, string> = {
     dashboard: 'Dashboard',
@@ -84,10 +88,15 @@ export function Header({
         <button type="button" aria-label="Notifikasi" className="hidden h-10 w-10 items-center justify-center rounded-full border border-[#c7d8f3] bg-white text-[#172554] shadow-sm transition hover:bg-[#eff6ff] xl:flex">
           <Bell className="h-[18px] w-[18px]" />
         </button>
-        <button type="button" aria-label="Profil" className="hidden items-center gap-1.5 rounded-full bg-white p-1 shadow-sm ring-1 ring-[#dbeafe] xl:flex">
-          <span className="grid h-8 w-8 place-items-center rounded-full bg-[#fed7aa] text-[#9a3412]"><UserRound className="h-4 w-4" /></span>
-          <ChevronDown className="mr-1 h-4 w-4 text-[#172554]" />
-        </button>
+        <div title={userEmail} className="hidden items-center gap-2.5 rounded-full bg-white py-1 pl-1 pr-3 shadow-sm ring-1 ring-[#dbeafe] md:flex">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-[#2563eb] text-xs font-bold text-white">
+            {initialsOf(userName || userEmail)}
+          </span>
+          <span className="flex min-w-0 flex-col leading-tight">
+            <span className="max-w-[140px] truncate text-xs font-bold text-[#172554]">{userName || 'Pengguna'}</span>
+            <span className="max-w-[140px] truncate text-[11px] text-[#5b6f99]">{userEmail}</span>
+          </span>
+        </div>
 
         <Button variant="outline" size="icon" onClick={onSignOut} aria-label="Keluar" title="Keluar" className="h-10 w-10 rounded-full border-[#c7d8f3] bg-white text-[#172554]">
           <LogOut className="h-4 w-4" />
@@ -118,4 +127,10 @@ function LayoutIcon({ view }: { view: View }) {
   };
   const Icon = icons[view];
   return <Icon className="h-5 w-5" strokeWidth={2.4} />;
+}
+
+function initialsOf(text: string): string {
+  const parts = text.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  const letters = parts.map((w) => w[0]).join('').toUpperCase();
+  return letters || '?';
 }
