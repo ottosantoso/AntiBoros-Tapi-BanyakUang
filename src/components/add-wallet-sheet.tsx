@@ -22,6 +22,7 @@ import {
   type WriteResult,
 } from '@/lib/data';
 import { formatIDR } from '@/lib/format';
+import { normalizeLogo } from '@/lib/logo';
 import {
   BANK_PROVIDERS,
   EWALLET_PROVIDERS,
@@ -144,7 +145,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     setSaldoAwal(formatRupiahInput(e.target.value));
   }
 
-  function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
+  async function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     e.target.value = '';
     if (!file) return;
@@ -156,7 +157,8 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
       toast.error('Ukuran logo maksimal 2 MB');
       return;
     }
-    setLogoFile(file);
+    // Logo disesuaikan otomatis (dipotong dan dipusatkan di kanvas 480×160) sebelum dipakai.
+    setLogoFile(await normalizeLogo(file));
   }
 
   /** Unggah logo hanya untuk pilihan "Lainnya" dan bila ada file. */

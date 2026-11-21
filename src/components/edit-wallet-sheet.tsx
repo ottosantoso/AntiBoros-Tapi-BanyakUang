@@ -28,6 +28,7 @@ import {
   type WriteResult,
 } from '@/lib/data';
 import { formatIDR } from '@/lib/format';
+import { normalizeLogo } from '@/lib/logo';
 import type { TransactionType, Wallet } from '@/lib/types';
 import { BANK_PROVIDERS, EWALLET_PROVIDERS, OTHER_PROVIDER_CODE, providerLogo } from '@/lib/wallet-providers';
 
@@ -111,7 +112,7 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
   const previewTampil = logoPreview ?? logoSekarang;
   const bisaHapusLogo = !logoFile && !hapusLogo && wallet.logoUrl !== null;
 
-  function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
+  async function onLogoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     e.target.value = '';
     if (!file) return;
@@ -123,7 +124,8 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
       toast.error('Ukuran logo maksimal 2 MB');
       return;
     }
-    setLogoFile(file);
+    // Logo disesuaikan otomatis (dipotong dan dipusatkan di kanvas 480×160) sebelum dipakai.
+    setLogoFile(await normalizeLogo(file));
     setHapusLogo(false);
   }
 
