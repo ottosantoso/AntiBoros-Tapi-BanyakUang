@@ -11,6 +11,7 @@ import {
   Repeat,
   Send,
   Tags,
+  Trash2,
   WalletCards,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -36,6 +37,10 @@ interface Props {
   lockTab?: boolean;
   /** When set, the sheet edits this transaction instead of creating one. */
   editing?: Transaction | null;
+  /** Dipakai untuk peringatan duplikat saat menambah transaksi (tidak memblokir simpan). */
+  existingTransactions?: Transaction[];
+  /** Jika diisi (mode edit), footer menampilkan tombol Hapus. */
+  onDelete?: () => void;
 }
 
 export interface TxActions {
@@ -78,6 +83,8 @@ export function AddTransactionSheet({
   initialTab = 'Pemasukan',
   lockTab = false,
   editing = null,
+  existingTransactions = [],
+  onDelete,
   addTransaction,
   editTransaction,
   addTransfer,
@@ -143,6 +150,15 @@ export function AddTransactionSheet({
     : isTransfer
       ? !invalidTransfer
       : deskripsi.trim().length > 0 && numeric > 0 && dompet.length > 0 && !insufficientBalance;
+
+  // Peringatan duplikat: transaksi dengan tanggal, deskripsi, nominal, dan dompet yang sama.
+  const possibleDuplicate = useMemo(() => {
+    if (editing || isTransfer || !deskripsi.trim() || numeric <= 0 || !dompet) return undefined;
+    const desc = deskripsi.trim().toLowerCase();
+    return existingTransactions.find(
+      (t) => t.tanggal === tanggal && t.nominal === numeric && t.deskripsi.trim().toLowerCase() === desc && t.walletId === dompet,
+    );
+  }, [editing, isTransfer, deskripsi, numeric, dompet, tanggal, existingTransactions]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -337,11 +353,22 @@ export function AddTransactionSheet({
                 </label>
 
                 {insufficientBalance && <WarningBox>Nominal pengeluaran melebihi saldo dompet yang dipilih.</WarningBox>}
+                {possibleDuplicate && (
+                  <div className="flex gap-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2.5 text-xs font-bold leading-relaxed text-amber-700 dark:text-amber-300">
+                    <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>Mirip dengan transaksi yang sudah ada ({possibleDuplicate.deskripsi}, {formatIDR(possibleDuplicate.nominal)}, {possibleDuplicate.tanggal}). Tetap bisa disimpan jika memang transaksi baru.</span>
+                  </div>
+                )}
               </>
             )}
           </div>
 
           <SheetFooter className="border-t border-border bg-card px-6 py-4">
+            {editing && onDelete && (
+              <Button type="button" variant="outline" onClick={onDelete} disabled={submitting} className="mr-auto h-11 gap-2 rounded-xl border-rose-400/40 font-extrabold text-rose-600 hover:bg-rose-500/10 hover:text-rose-600">
+                <Trash2 className="h-4 w-4" /> Hapus
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting} className="h-11 rounded-xl border-border bg-muted font-extrabold text-foreground hover:bg-accent/40">
               Batal
             </Button>

@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, FileSearch2, Filter, ListFilter, PlusCircle, Search, Sparkles, WalletCards, X } from 'lucide-react';
-import type { DashboardData, TransactionType, WalletTransfer } from '@/lib/types';
+import { toast } from 'sonner';
+import type { DashboardData, Transaction, TransactionType, WalletTransfer } from '@/lib/types';
 import type { TransactionSection } from '@/app/views';
 import { AddTransactionSheet, type SheetTab, type TxActions } from '@/components/add-transaction-sheet';
 import { Button } from '@/components/ui/button';
@@ -13,12 +14,16 @@ import { formatIDR } from '@/lib/format';
 
 type TypeFilter = 'all' | TransactionType;
 
+/** Jeda sebelum penghapusan benar-benar dikirim ke database; selama itu bisa diurungkan. */
+const UNDO_MS = 8000;
+
 interface Props extends TxActions {
   data: DashboardData;
   transfers: WalletTransfer[];
   loading: boolean;
   txSection: TransactionSection;
   onChanged: () => void;
+  removeTransaction: (id: string) => Promise<{ success: boolean; error: string | null }>;
 }
 
 /** Tab form yang dibuka dari tombol di setiap submenu Transaksi. */
@@ -49,8 +54,29 @@ export function TransactionsView({
   addTransaction,
   editTransaction,
   addTransfer,
+  removeTransaction,
 }: Props) {
   const [sheetTab, setSheetTab] = useState<SheetTab | null>(null);
+  const [editTarget, setEditTarget] = useState<Transaction | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+  const pendingDeletes = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const removeRef = useRef(removeTransaction);
+
+  useEffect(() => {
+    removeRef.current = removeTransaction;
+  }, [removeTransaction]);
+
+  // Penghapusan yang masih menunggu dijalankan saat halaman ditutup, supaya tidak hilang diam-diam.
+  useEffect(() => {
+    const pending = pendingDeletes.current;
+    return () => {
+      pending.forEach((timer, id) => {
+        clearTimeout(timer);
+        void removeRef.current(id);
+      });
+      pending.clear();
+    };
+  }, []);
   const [filter, setFilter] = useState<TypeFilter>('all');
   const [query, setQuery] = useState('');
   const [wallet, setWallet] = useState('all');
@@ -58,7 +84,12 @@ export function TransactionsView({
   const [toDate, setToDate] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const transactions = useMemo(() => data.transaksi ?? [], [data.transaksi]);
+  const allTransactions = useMemo(() => data.transaksi ?? [], [data.transaksi]);
+  // Transaksi yang sedang menunggu penghapusan disembunyikan dari tampilan.
+  const transactions = useMemo(
+    () => allTransactions.filter((t) => !t.id || !hiddenIds.has(t.id)),
+    [allTransactions, hiddenIds],
+  );
   const wallets = useMemo(() => Array.from(new Set(transactions.map((transaction) => transaction.dompet))).filter(Boolean), [transactions]);
   const activeAdvancedFilters = [wallet !== 'all', Boolean(fromDate), Boolean(toDate)].filter(Boolean).length;
 
@@ -93,6 +124,56 @@ export function TransactionsView({
   const actions = SECTION_ACTIONS[txSection];
   const defaultTab: SheetTab = actions[0].tab;
 
+  function openCreate(tab: SheetTab) {
+    setEditTarget(null);
+    setSheetTab(tab);
+  }
+
+  function openEdit(tx: Transaction) {
+    setSheetTab(null);
+    setEditTarget(tx);
+  }
+
+  function hideTransaction(id: string) {
+    setHiddenIds((prev) => new Set(prev).add(id));
+  }
+
+  function showTransaction(id: string) {
+    setHiddenIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function handleDelete(tx: Transaction) {
+    const id = tx.id;
+    if (!id) return;
+    setEditTarget(null);
+    hideTransaction(id);
+    const timer = setTimeout(async () => {
+      pendingDeletes.current.delete(id);
+      const res = await removeRef.current(id);
+      if (!res.success) {
+        showTransaction(id);
+        toast.error('Gagal menghapus transaksi', { description: res.error ?? undefined });
+      }
+    }, UNDO_MS);
+    pendingDeletes.current.set(id, timer);
+    toast('Transaksi dihapus', {
+      description: `${tx.deskripsi} · ${formatIDR(tx.nominal)}`,
+      duration: UNDO_MS,
+      action: { label: 'Urungkan', onClick: () => undoDelete(id) },
+    });
+  }
+
+  function undoDelete(id: string) {
+    const timer = pendingDeletes.current.get(id);
+    if (timer) clearTimeout(timer);
+    pendingDeletes.current.delete(id);
+    showTransaction(id);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -102,7 +183,7 @@ export function TransactionsView({
             <Button
               key={action.tab}
               size="sm"
-              onClick={() => setSheetTab(action.tab)}
+              onClick={() => openCreate(action.tab)}
               className={cn('h-10 gap-2 rounded-full px-4 font-bold text-white shadow-sm', action.className)}
             >
               <PlusCircle className="h-4 w-4" strokeWidth={2.4} />
@@ -113,7 +194,7 @@ export function TransactionsView({
       </div>
 
       {txSection === 'transfer' ? (
-        <TransferList transfers={transfers} loading={loading} onAdd={() => setSheetTab('Transfer')} />
+        <TransferList transfers={transfers} loading={loading} onAdd={() => openCreate('Transfer')} />
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -156,20 +237,26 @@ export function TransactionsView({
               <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]"><ListFilter className="h-5 w-5" /></span><div><h2 className="font-display text-base font-extrabold tracking-[-0.02em] text-[#172554]">Riwayat Transaksi</h2><p className="text-xs font-medium text-[#5b6f99]">{loading ? 'Memuat transaksi...' : `${filtered.length} transaksi ditemukan`}</p></div></div>
               {!loading && filtered.length > 0 && <span className="hidden rounded-full bg-[#eff6ff] px-3 py-1.5 text-xs font-extrabold text-[#2563eb] sm:inline-flex">Terbaru</span>}
             </div>
-            {loading ? <TransactionList transactions={filtered} loading limit={5} /> : filtered.length ? <div className="overflow-x-auto"><div className="min-w-[680px]"><div className="grid grid-cols-[minmax(86px,1fr)_minmax(130px,1.5fr)_minmax(105px,1fr)_auto] gap-3 border-b border-[#dbeafe] pb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#5b6f99]"><span>Tanggal</span><span>Keterangan</span><span>Kategori</span><span className="text-right">Nominal</span></div><TransactionList transactions={filtered} limit={10} /></div></div> : <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => setSheetTab(defaultTab)} actionLabel={actions[0].label} />}
+            {loading ? <TransactionList transactions={filtered} loading limit={5} /> : filtered.length ? <div className="overflow-x-auto"><div className="min-w-[680px]"><div className="grid grid-cols-[minmax(86px,1fr)_minmax(130px,1.5fr)_minmax(105px,1fr)_auto] gap-3 border-b border-[#dbeafe] pb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#5b6f99]"><span>Tanggal</span><span>Keterangan</span><span>Kategori</span><span className="text-right">Nominal</span></div><TransactionList transactions={filtered} limit={10} onSelect={openEdit} /></div></div> : <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => openCreate(defaultTab)} actionLabel={actions[0].label} />}
           </Card>
         </>
       )}
 
       <AddTransactionSheet
-        open={sheetTab !== null}
+        open={sheetTab !== null || editTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setSheetTab(null);
+          if (!open) {
+            setSheetTab(null);
+            setEditTarget(null);
+          }
         }}
         wallets={data.dompet}
         onSubmitted={onChanged}
         initialTab={sheetTab ?? defaultTab}
         lockTab
+        editing={editTarget}
+        existingTransactions={allTransactions}
+        onDelete={editTarget ? () => handleDelete(editTarget) : undefined}
         addTransaction={addTransaction}
         editTransaction={editTransaction}
         addTransfer={addTransfer}

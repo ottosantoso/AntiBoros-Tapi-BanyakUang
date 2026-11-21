@@ -24,10 +24,18 @@ function categoryClass(category: string) {
   return 'bg-[#e0f2fe] text-[#0369a1]';
 }
 
-export function TransactionRow({ tx, divider = true }: { tx: Transaction; divider?: boolean }) {
+export function TransactionRow({ tx, divider = true, onSelect }: { tx: Transaction; divider?: boolean; onSelect?: (tx: Transaction) => void }) {
   const income = tx.tipe === 'Pemasukan';
   const category = tx.kategori ?? categoryFromDesc(tx.deskripsi);
-  return <div className={cn('grid grid-cols-[minmax(86px,1fr)_minmax(130px,1.5fr)_minmax(105px,1fr)_auto] items-center gap-3 py-2.5', divider && 'border-t border-[#e7eef9]')}>
+  // Transaksi hasil transfer diubah dari menu Transfer, bukan dari baris ini.
+  const clickable = Boolean(onSelect) && !tx.transferId;
+  return <div
+    role={clickable ? 'button' : undefined}
+    tabIndex={clickable ? 0 : undefined}
+    onClick={clickable ? () => onSelect?.(tx) : undefined}
+    onKeyDown={clickable ? (event) => { if (event.key === 'Enter') onSelect?.(tx); } : undefined}
+    title={clickable ? 'Klik untuk ubah atau hapus' : tx.transferId ? 'Transaksi transfer, diubah dari menu Transfer' : undefined}
+    className={cn('grid grid-cols-[minmax(86px,1fr)_minmax(130px,1.5fr)_minmax(105px,1fr)_auto] items-center gap-3 py-2.5', divider && 'border-t border-[#e7eef9]', clickable && 'cursor-pointer rounded-lg transition hover:bg-[#f5f9ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]')}>
     <div className="flex items-center gap-2 text-xs font-semibold text-[#31548a]"><CalendarDays className="h-3.5 w-3.5 text-[#2563eb]" />{formatDateRelative(tx.tanggal)}</div>
     <div className="flex min-w-0 items-center gap-2"><span className={cn('grid h-7 w-7 shrink-0 place-items-center rounded-lg', income ? 'bg-[#dcfce7] text-[#059669]' : 'bg-[#ffe4e6] text-[#e11d48]')}>{income ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}</span><div className="min-w-0"><p className="truncate text-xs font-bold text-[#172554]">{tx.deskripsi}</p><p className="truncate text-[10px] font-medium text-[#6b7da4]">{walletGlyph(tx.dompet) || '•'} {tx.dompet}</p></div></div>
     <span className={cn('w-fit rounded-full px-2.5 py-1 text-[10px] font-extrabold', categoryClass(category))}>{category}</span>
@@ -35,11 +43,11 @@ export function TransactionRow({ tx, divider = true }: { tx: Transaction; divide
   </div>;
 }
 
-export function TransactionList({ transactions, loading, limit, emptyHint }: { transactions: Transaction[]; loading?: boolean; limit?: number; emptyHint?: string }) {
+export function TransactionList({ transactions, loading, limit, emptyHint, onSelect }: { transactions: Transaction[]; loading?: boolean; limit?: number; emptyHint?: string; onSelect?: (tx: Transaction) => void }) {
   if (loading) return <div className="space-y-1">{Array.from({ length: limit ?? 6 }).map((_, i) => <div key={i} className="flex items-center gap-3 py-3"><Skeleton className="h-8 w-8 rounded-lg" /><div className="flex-1 space-y-2"><Skeleton className="h-3 w-40" /><Skeleton className="h-3 w-56" /></div><Skeleton className="h-4 w-24" /></div>)}</div>;
   const list = limit ? transactions.slice(0, limit) : transactions;
   if (!list.length) return <div className="flex flex-col items-center justify-center py-12 text-center"><Inbox className="h-9 w-9 text-[#93a4c4]" /><p className="mt-3 text-sm font-bold text-[#5b6f99]">Belum ada transaksi.</p><p className="text-xs font-medium text-[#93a4c4]">{emptyHint ?? 'Tambahkan transaksi pertama Anda.'}</p></div>;
-  return <div>{list.map((tx, index) => <TransactionRow key={`${tx.tanggal}-${tx.deskripsi}-${index}`} tx={tx} divider={index > 0} />)}</div>;
+  return <div>{list.map((tx, index) => <TransactionRow key={tx.id ?? `${tx.tanggal}-${tx.deskripsi}-${index}`} tx={tx} divider={index > 0} onSelect={onSelect} />)}</div>;
 }
 
 export function TransactionListCard({ transactions, loading, limit = 6 }: { transactions: Transaction[]; loading?: boolean; limit?: number }) {
