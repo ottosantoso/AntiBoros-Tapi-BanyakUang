@@ -18,7 +18,7 @@ const logo = (file: string) => `${LOGO_DIR}/${file}.svg`;
 
 export const BANK_PROVIDERS: WalletProvider[] = [
   { code: 'BCA', nama: 'BCA', glyph: 'BCA', jenis: 'bank', color: '#0061a8', logo: logo('bca') },
-  { code: 'BLU', nama: 'blu by BCA Digital', glyph: 'blu', jenis: 'bank', color: '#00b7d8', logo: logo('blu-bca-digital') },
+  { code: 'BLU', nama: 'blu by BCA Digital', glyph: 'blu', jenis: 'bank', color: '#00b7d8', logo: `${LOGO_DIR}/blu-bca-digital.png` },
   { code: 'BNI', nama: 'BNI', glyph: 'BNI', jenis: 'bank', color: '#f15a22', logo: logo('bni') },
   { code: 'BRI', nama: 'BRI', glyph: 'BRI', jenis: 'bank', color: '#00529c', logo: logo('bri') },
   { code: 'MANDIRI', nama: 'Mandiri', glyph: 'mandiri', jenis: 'bank', color: '#003d79', logo: logo('mandiri') },
