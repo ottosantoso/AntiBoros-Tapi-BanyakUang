@@ -2,7 +2,9 @@ import { useState, type ComponentProps } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, Loader2, Lock, LogIn, Mail, User, UserPlus } from 'lucide-react';
+import {
+  Eye, EyeOff, Loader2, Lock, LogIn, Mail, PieChart, Receipt, ShieldCheck, User, UserPlus, Wallet,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
 
@@ -121,6 +123,18 @@ export function LoginView() {
             <p className="mt-3 max-w-xs text-base text-[#4b5b80]">
               Masuk untuk melihat dompet dan transaksi Anda.
             </p>
+
+            <ul className="mt-6 grid w-full max-w-sm gap-3 text-left">
+              <FeatureItem icon={<Wallet className="h-5 w-5" />} title="Kelola dompet" desc="Saldo semua rekening dan e-wallet dalam satu tempat." />
+              <FeatureItem icon={<Receipt className="h-5 w-5" />} title="Catat transaksi" desc="Input manual atau scan struk dan mutasi." />
+              <FeatureItem icon={<PieChart className="h-5 w-5" />} title="Pantau pengeluaran" desc="Lihat ke mana uang Anda pergi setiap bulan." />
+            </ul>
+
+            <p className="mt-6 flex items-center gap-2 text-xs font-semibold text-[#5b6f99]">
+              <ShieldCheck className="h-4 w-4 text-[#2563eb]" />
+              Data hanya bisa diakses oleh akun Anda
+            </p>
+
             <Illustration />
           </section>
 
@@ -348,6 +362,18 @@ function SubmitButton({
       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       {children}
     </button>
+  );
+}
+
+function FeatureItem({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+  return (
+    <li className="flex items-start gap-3 rounded-2xl border border-white bg-white/70 p-3 shadow-[0_8px_20px_rgba(37,99,235,0.06)]">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#e8efff] text-[#2563eb]">{icon}</span>
+      <span>
+        <span className="block text-sm font-bold text-[#0f1a3a]">{title}</span>
+        <span className="block text-xs text-[#5b6f99]">{desc}</span>
+      </span>
+    </li>
   );
 }
 
