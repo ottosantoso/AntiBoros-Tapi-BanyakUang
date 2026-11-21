@@ -21,6 +21,7 @@ interface WalletRow {
   logo_url?: string | null;
   is_archived?: boolean | null;
   archived_at?: string | null;
+  created_at?: string | null;
 }
 
 interface TransactionRow {
@@ -334,6 +335,7 @@ export interface WalletNameMatch {
   nama: string;
   saldo: number;
   isArchived: boolean;
+  createdAt: string | null;
 }
 
 /** Unggah logo dompet ke bucket publik. Hanya untuk pengguna yang sudah masuk. */
@@ -372,7 +374,7 @@ export async function findWalletsByName(
 ): Promise<{ matches: WalletNameMatch[]; error: string | null }> {
   const { data, error } = await supabase
     .from('wallets')
-    .select('id, nama, saldo, is_archived')
+    .select('id, nama, saldo, is_archived, created_at')
     .ilike('nama', escapeLike(nama.trim()));
   if (error) return { matches: [], error: error.message };
   const matches = ((data ?? []) as WalletRow[]).map((r) => ({
@@ -380,6 +382,7 @@ export async function findWalletsByName(
     nama: r.nama,
     saldo: toNumber(r.saldo),
     isArchived: Boolean(r.is_archived),
+    createdAt: r.created_at ?? null,
   }));
   return { matches, error: null };
 }
@@ -399,7 +402,7 @@ export async function fetchArchivedWallets(): Promise<{ wallets: ArchivedWallet[
   return { wallets, error: null };
 }
 
-/** Arsipkan dompet. Saldonya tetap tersimpan dan dompet tidak bisa dipakai lagi. */
+/** Arsipkan dompet. Saldonya tetap tersimpan dan dompet tidak bisa dipakai untuk transaksi baru. */
 export async function archiveWalletRow(id: string): Promise<WriteResult> {
   const { error } = await supabase
     .from('wallets')
