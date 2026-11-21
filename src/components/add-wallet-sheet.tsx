@@ -12,7 +12,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { uploadWalletLogo, type WalletInput, type WriteResult } from '@/lib/data';
+import {
+  findWalletsByName,
+  renameWalletRow,
+  restoreWalletRow,
+  uploadWalletLogo,
+  type WalletInput,
+  type WalletNameMatch,
+  type WriteResult,
+} from '@/lib/data';
+import { formatIDR } from '@/lib/format';
 import {
   BANK_PROVIDERS,
   EWALLET_PROVIDERS,
@@ -48,6 +57,8 @@ function formatRupiahInput(raw: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
+type LogoResult = { ok: true; url: string | null } | { ok: false };
+
 export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: AddWalletSheetProps) {
   const [jenis, setJenis] = useState<Jenis>('bank');
   const [selected, setSelected] = useState<string | null>(null);
@@ -57,6 +68,8 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Dompet arsip yang namanya sama dengan yang diisi, beserta saldo yang diinput. */
+  const [konflik, setKonflik] = useState<{ arsip: WalletNameMatch; saldoBaru: number } | null>(null);
 
   // Kosongkan form setiap sheet ditutup, supaya pembukaan berikutnya bersih.
   useEffect(() => {
@@ -67,6 +80,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     setNamaDiedit(false);
     setSaldoAwal('');
     setLogoFile(null);
+    setKonflik(null);
     setSaving(false);
   }, [open]);
 
@@ -86,6 +100,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
 
   function pilihJenis(next: Jenis) {
     setJenis(next);
+    setKonflik(null);
     // Pilihan dari jenis lain tidak boleh tersisa setelah jenis berganti.
     setSelected((cur) => {
       if (!cur || cur === OTHER_PROVIDER_CODE) return cur;
@@ -98,12 +113,20 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
   function pilihProvider(p: WalletProvider) {
     setSelected(p.code);
     setLogoFile(null);
+    setKonflik(null);
     if (!namaDiedit) setNama(`Dompet ${p.nama}`);
   }
 
   function pilihLainnya() {
     setSelected(OTHER_PROVIDER_CODE);
+    setKonflik(null);
     if (!namaDiedit) setNama('');
+  }
+
+  function onNamaChange(e: ChangeEvent<HTMLInputElement>) {
+    setNama(e.target.value);
+    setNamaDiedit(true);
+    setKonflik(null);
   }
 
   function onSaldoChange(e: ChangeEvent<HTMLInputElement>) {
@@ -125,6 +148,42 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     setLogoFile(file);
   }
 
+  /** Unggah logo hanya untuk pilihan "Lainnya" dan bila ada file. */
+  async function unggahLogoBila(): Promise<LogoResult> {
+    if (!isOther || !logoFile) return { ok: true, url: null };
+    const up = await uploadWalletLogo(logoFile);
+    if (up.error || !up.url) {
+      toast.error('Gagal mengunggah logo', { description: up.error ?? undefined });
+      return { ok: false };
+    }
+    return { ok: true, url: up.url };
+  }
+
+  function selesai(namaFinal: string) {
+    toast.success('Dompet berhasil ditambahkan', { description: namaFinal });
+    onSubmitted();
+    onOpenChange(false);
+  }
+
+  /** Buat baris dompet baru. Mengembalikan false bila gagal (sudah ada pesan error). */
+  async function buatBaru(namaFinal: string, saldo: number): Promise<boolean> {
+    const logo = await unggahLogoBila();
+    if (!logo.ok) return false;
+    // Grid hanya menampilkan provider sesuai jenis aktif, jadi jenis state sudah benar.
+    const res = await addWallet({
+      nama: namaFinal,
+      provider: selected ?? '',
+      saldo,
+      jenis,
+      logo_url: logo.url,
+    });
+    if (!res.success) {
+      toast.error('Gagal menambah dompet', { description: res.error ?? undefined });
+      return false;
+    }
+    return true;
+  }
+
   async function simpan() {
     if (!selected) {
       toast.error('Pilih bank atau e-wallet dulu');
@@ -143,31 +202,73 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
 
     setSaving(true);
     try {
-      let logoUrl: string | null = null;
-      if (isOther && logoFile) {
-        const up = await uploadWalletLogo(logoFile);
-        if (up.error || !up.url) {
-          toast.error('Gagal mengunggah logo', { description: up.error ?? undefined });
-          return;
-        }
-        logoUrl = up.url;
-      }
-
-      // Grid hanya menampilkan provider sesuai jenis aktif, jadi jenis state sudah benar.
-      const res = await addWallet({
-        nama: namaFinal,
-        provider: selected,
-        saldo: saldoFinal,
-        jenis,
-        logo_url: logoUrl,
-      });
-      if (!res.success) {
-        toast.error('Gagal menambah dompet', { description: res.error ?? undefined });
+      const cek = await findWalletsByName(namaFinal);
+      if (cek.error) {
+        toast.error('Gagal memeriksa nama dompet', { description: cek.error });
         return;
       }
-      toast.success('Dompet berhasil ditambahkan', { description: namaFinal });
+      if (cek.matches.some((m) => !m.isArchived)) {
+        toast.error('Nama dompet sudah dipakai', { description: 'Pilih nama lain.' });
+        return;
+      }
+      const arsip = cek.matches.find((m) => m.isArchived);
+      if (arsip) {
+        // Jangan buat dompet baru dulu; tanyakan dulu apa yang dipakai.
+        setKonflik({ arsip, saldoBaru: saldoFinal });
+        return;
+      }
+      if (await buatBaru(namaFinal, saldoFinal)) selesai(namaFinal);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Pilihan 1: pulihkan dompet arsip beserta sisa saldonya. Saldo yang diinput diabaikan. */
+  async function pakaiSisaArsip() {
+    if (!konflik) return;
+    setSaving(true);
+    try {
+      const logo = await unggahLogoBila();
+      if (!logo.ok) return;
+      const res = await restoreWalletRow(konflik.arsip.id, {
+        provider: selected ?? '',
+        jenis,
+        logo_url: logo.url,
+      });
+      if (!res.success) {
+        toast.error('Gagal memulihkan dompet', { description: res.error ?? undefined });
+        return;
+      }
+      toast.success('Dompet dipulihkan dengan sisa saldo lama', {
+        description: `${konflik.arsip.nama} · ${formatIDR(konflik.arsip.saldo)}`,
+      });
       onSubmitted();
       onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Pilihan 2: dompet arsip tetap di arsip dengan sisanya, lalu buat dompet baru dengan saldo yang diinput. */
+  async function mulaiBaru() {
+    if (!konflik) return;
+    const namaFinal = nama.trim();
+    const { arsip, saldoBaru } = konflik;
+    setSaving(true);
+    try {
+      const tgl = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+      const namaArsip = `${arsip.nama} (arsip ${tgl})`;
+      const ren = await renameWalletRow(arsip.id, namaArsip);
+      if (!ren.success) {
+        toast.error('Gagal menyiapkan dompet arsip', { description: ren.error ?? undefined });
+        return;
+      }
+      if (await buatBaru(namaFinal, saldoBaru)) {
+        selesai(namaFinal);
+      } else {
+        // Dibatalkan: kembalikan nama dompet arsip seperti semula.
+        await renameWalletRow(arsip.id, arsip.nama);
+      }
     } finally {
       setSaving(false);
     }
@@ -282,10 +383,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
               value={nama}
               maxLength={40}
               placeholder="Contoh: Dompet BCA"
-              onChange={(e) => {
-                setNama(e.target.value);
-                setNamaDiedit(true);
-              }}
+              onChange={onNamaChange}
             />
           </section>
 
@@ -311,13 +409,42 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
               Kosongkan bila saldo mulai dari Rp 0. Saldo ini tidak dihitung sebagai pemasukan.
             </p>
           </section>
+
+          {konflik && (
+            <section role="alert" className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
+              <p className="text-sm font-semibold text-foreground">
+                Dompet "{konflik.arsip.nama}" pernah diarsipkan
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Sisa saldonya masih tersimpan {formatIDR(konflik.arsip.saldo)}. Pilih cara melanjutkan:
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button variant="outline" className="h-auto justify-start py-2.5 text-left" onClick={pakaiSisaArsip} disabled={saving}>
+                  <span className="flex flex-col items-start">
+                    <span className="text-sm font-semibold">Pakai sisa saldo {formatIDR(konflik.arsip.saldo)}</span>
+                    <span className="text-[11px] font-normal text-muted-foreground">
+                      Dompet lama dipulihkan. Saldo yang kamu isi ({formatIDR(konflik.saldoBaru)}) diabaikan.
+                    </span>
+                  </span>
+                </Button>
+                <Button variant="outline" className="h-auto justify-start py-2.5 text-left" onClick={mulaiBaru} disabled={saving}>
+                  <span className="flex flex-col items-start">
+                    <span className="text-sm font-semibold">Mulai baru dengan {formatIDR(konflik.saldoBaru)}</span>
+                    <span className="text-[11px] font-normal text-muted-foreground">
+                      Dompet lama tetap di arsip dengan sisa saldonya dan diberi nama baru.
+                    </span>
+                  </span>
+                </Button>
+              </div>
+            </section>
+          )}
         </div>
 
         <SheetFooter className="flex-row gap-3 border-t border-border px-6 py-4">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={saving}>
             Batal
           </Button>
-          <Button className="flex-1" onClick={simpan} disabled={saving}>
+          <Button className="flex-1" onClick={simpan} disabled={saving || konflik !== null}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Simpan
           </Button>
