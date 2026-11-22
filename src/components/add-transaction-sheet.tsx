@@ -9,6 +9,7 @@ import {
   Loader2,
   PlusCircle,
   Repeat,
+  Search,
   Send,
   Tags,
   Trash2,
@@ -102,7 +103,9 @@ export function AddTransactionSheet({
   const [dompet, setDompet] = useState('');
   const [berulang, setBerulang] = useState(false);
   const [subkategoriList, setSubkategoriList] = useState<Subkategori[]>([]);
+  /** Kosong = otomatis dari deskripsi. Terisi = pilihan manual user. */
   const [subkategoriId, setSubkategoriId] = useState('');
+  const [subQuery, setSubQuery] = useState('');
 
   // Transfer state
   const [fromWallet, setFromWallet] = useState('');
@@ -114,6 +117,7 @@ export function AddTransactionSheet({
 
   useEffect(() => {
     if (!open) return;
+    setSubQuery('');
     if (editing) {
       setTab(editing.tipe);
       setTanggal(editing.tanggal);
@@ -170,21 +174,28 @@ export function AddTransactionSheet({
     () => subkategoriList.filter((s) => s.jenis === tab && !SYSTEM_SUBKATEGORI.has(s.nama)),
     [subkategoriList, tab],
   );
-  // Saran dari deskripsi. Dipakai sebagai pilihan awal kalau user belum memilih manual.
-  const suggested = guessCategory(deskripsi, tab as TransactionType);
-  const effectiveSubId =
-    subOptions.find((s) => s.id === subkategoriId)?.id ??
-    subOptions.find((s) => s.kategori === suggested)?.id ??
-    subOptions[0]?.id ??
-    '';
-  const selectedSub = subOptions.find((s) => s.id === effectiveSubId);
 
-  const category = isTransfer ? 'Transfer' : (selectedSub?.kategori ?? suggested);
+  // Subkategori opsional: kalau user tidak memilih manual, dipakai saran dari deskripsi.
+  const autoSub = useMemo(
+    () => (isTransfer ? undefined : suggestSubkategori(subOptions, deskripsi, tab as TransactionType)),
+    [subOptions, deskripsi, tab, isTransfer],
+  );
+  const manualSub = subOptions.find((s) => s.id === subkategoriId);
+  const selectedSub = manualSub ?? autoSub;
+  const effectiveSubId = selectedSub?.id ?? '';
+
+  const category = isTransfer ? 'Transfer' : (selectedSub?.kategori ?? guessCategory(deskripsi, tab as TransactionType));
   const valid = editing
     ? numeric > 0 && dompet.length > 0 && !insufficientBalance && Boolean(effectiveSubId)
     : isTransfer
       ? !invalidTransfer
       : deskripsi.trim().length > 0 && numeric > 0 && dompet.length > 0 && !insufficientBalance && Boolean(effectiveSubId);
+
+  // Daftar pilihan manual, dengan pencarian nama atau kategori induk.
+  const subKeyword = subQuery.trim().toLowerCase();
+  const subFiltered = subKeyword
+    ? subOptions.filter((s) => s.nama.toLowerCase().includes(subKeyword) || s.kategori.toLowerCase().includes(subKeyword))
+    : subOptions;
 
   // Peringatan duplikat: transaksi dengan tanggal, deskripsi, nominal, dan dompet yang sama.
   const possibleDuplicate = useMemo(() => {
@@ -354,20 +365,66 @@ export function AddTransactionSheet({
                 <div className="space-y-2">
                   <Label htmlFor="tx-desc" className="text-sm font-extrabold text-foreground">Deskripsi</Label>
                   <Input id="tx-desc" placeholder="cth. Belanja bulanan, Gaji, Kopi..." value={deskripsi} onChange={(e) => setDeskripsi(e.target.value)} maxLength={80} className="h-11 rounded-xl border-border bg-card font-medium text-foreground placeholder:text-muted-foreground" required />
-                  <Label htmlFor="tx-sub" className="text-sm font-extrabold text-foreground">Subkategori</Label>
-                  <select
-                    id="tx-sub"
-                    value={effectiveSubId}
-                    onChange={(e) => setSubkategoriId(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-border bg-card px-3 text-sm font-medium text-foreground"
-                  >
-                    {subOptions.length === 0 && <option value="">Belum ada subkategori</option>}
-                    {subOptions.map((s) => (
-                      <option key={s.id} value={s.id}>{s.nama} ({s.kategori})</option>
-                    ))}
-                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm font-extrabold text-foreground">Subkategori (opsional)</Label>
+                    {manualSub ? (
+                      <button type="button" onClick={() => setSubkategoriId('')} className="text-xs font-bold text-primary underline-offset-2 hover:underline">
+                        Kembali ke otomatis
+                      </button>
+                    ) : null}
+                  </div>
+
                   <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs font-bold text-primary">
-                    <Tags className="h-3.5 w-3.5" />Saran dari deskripsi: <span>{suggested}</span>
+                    <Tags className="h-3.5 w-3.5 shrink-0" />
+                    <span className="min-w-0 truncate">
+                      {manualSub
+                        ? <>Dipilih manual: <span>{manualSub.nama}</span></>
+                        : autoSub
+                          ? <>Otomatis dari deskripsi: <span>{autoSub.nama}</span></>
+                          : 'Tulis deskripsi atau pilih subkategori di bawah'}
+                    </span>
+                  </div>
+
+                  <div className="rounded-xl border border-border bg-card p-2">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                      <Input
+                        value={subQuery}
+                        onChange={(e) => setSubQuery(e.target.value)}
+                        placeholder="Cari subkategori..."
+                        aria-label="Cari subkategori"
+                        className="h-10 rounded-lg border-border bg-background pl-9 font-medium text-foreground placeholder:text-muted-foreground"
+                      />
+                    </div>
+                    <ul role="listbox" aria-label="Pilihan subkategori" className="mt-2 max-h-52 space-y-0.5 overflow-y-auto overscroll-contain">
+                      {subFiltered.length === 0 ? (
+                        <li className="px-2 py-3 text-center text-xs font-semibold text-muted-foreground">Subkategori tidak ditemukan.</li>
+                      ) : (
+                        subFiltered.map((s) => {
+                          const active = s.id === effectiveSubId;
+                          return (
+                            <li key={s.id}>
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={active}
+                                onClick={() => setSubkategoriId(s.id)}
+                                className={cn(
+                                  'flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
+                                  active ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted',
+                                )}
+                              >
+                                <span className="min-w-0 truncate font-semibold">{s.nama}</span>
+                                <span className={cn('shrink-0 text-[11px] font-medium', active ? 'text-primary-foreground/80' : 'text-muted-foreground')}>{s.kategori}</span>
+                              </button>
+                            </li>
+                          );
+                        })
+                      )}
+                    </ul>
                   </div>
                 </div>
 
@@ -468,6 +525,35 @@ function WarningBox({ children }: { children: React.ReactNode }) {
     <div className="flex gap-2 rounded-xl border border-rose-400/40 bg-rose-500/10 px-3 py-2.5 text-xs font-bold leading-relaxed text-rose-300">
       <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />{children}
     </div>
+  );
+}
+
+/**
+ * Saran subkategori dari deskripsi. Urutan: nama subkategori yang muncul di deskripsi (paling panjang
+ * yang dicocokkan), lalu kata kunci kategori dari guessCategory, lalu kategori cadangan.
+ * Tidak mengembalikan apa pun bila deskripsi kosong, agar user memilih sendiri.
+ */
+export function suggestSubkategori(
+  list: Subkategori[],
+  description: string,
+  type: TransactionType,
+): Subkategori | undefined {
+  const desc = description.trim().toLowerCase();
+  if (!desc || list.length === 0) return undefined;
+
+  const byName = list
+    .filter((s) => desc.includes(s.nama.toLowerCase()))
+    .sort((a, b) => b.nama.length - a.nama.length)[0];
+  if (byName) return byName;
+
+  const kategori = guessCategory(description, type);
+  if (type === 'Pemasukan' && kategori === 'Pemasukan') {
+    return list.find((s) => s.nama === 'Pendapatan Lainnya') ?? list.find((s) => s.kategori === kategori);
+  }
+  return (
+    list.find((s) => s.nama === kategori) ??
+    list.find((s) => s.kategori === kategori) ??
+    list.find((s) => s.nama === 'Lain-lain' || s.nama === 'Pendapatan Lainnya')
   );
 }
 
