@@ -166,7 +166,7 @@ export function WalletsView({
         </Button>
       </div>
 
-      <WalletGrid wallets={wallets} loading={loading} />
+      <WalletGrid wallets={wallets} loading={loading} sembunyi={sembunyi} />
 
       {/* Detailed table */}
       {!loading && wallets.length > 0 && (
