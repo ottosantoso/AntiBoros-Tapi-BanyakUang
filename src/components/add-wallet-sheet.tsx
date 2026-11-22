@@ -40,6 +40,12 @@ const NAMA_TUNAI_DEFAULT = 'Dompet Tunai';
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml';
 
+/**
+ * Footer tombol dinaikkan dari tepi bawah. Badge "Powered by Netlify" tampil di pojok kanan bawah
+ * saat production dan menutupi tombol Simpan. Area aman iPhone tetap diperhitungkan.
+ */
+const FOOTER_PADDING_BAWAH = 'pb-[max(4rem,env(safe-area-inset-bottom))] md:pb-[max(4.5rem,env(safe-area-inset-bottom))]';
+
 interface AddWalletSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -478,7 +484,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
           )}
         </div>
 
-        <SheetFooter className="flex-row gap-3 border-t border-border px-6 py-4">
+        <SheetFooter className={cn('flex-row gap-3 border-t border-border px-6 pt-4', FOOTER_PADDING_BAWAH)}>
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={saving}>
             Batal
           </Button>
