@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -9,13 +9,15 @@ import {
   PieChart as PieChartIcon,
   PiggyBank,
   Trophy,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MetricCard } from '@/components/metric-card';
 import { CashflowChart } from '@/components/cashflow-charts';
 import { useAnalisa } from '@/lib/use-analisa';
-import type { AnalisaData } from '@/lib/data';
+import { fetchAiAnalysis, type AnalisaData } from '@/lib/data';
 import { formatIDR } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -139,7 +141,7 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
   const insights = useMemo(() => (d ? buildInsights(d, mode) : []), [d, mode]);
 
   return (
-    <div className="space-y-4">
+    <div className="tabular-nums space-y-4">
       <PeriodBar
         mode={mode}
         onMode={setMode}
@@ -216,6 +218,8 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
               </div>
               <InsightCard items={insights} loading={loading} />
             </div>
+
+            <AiInsightCard data={d} periodLabel={periodLabel} loading={loading} />
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               <CategoryCard data={d} loading={loading} />
@@ -515,43 +519,121 @@ function TopCard({ data, loading }: { data: AnalisaData | null; loading: boolean
 function FlowCard({ data, loading }: { data: AnalisaData | null; loading: boolean }) {
   if (loading || !data) return <CardSkeleton rows={3} />;
 
-  const base = Math.max(data.pemasukan, data.pengeluaran);
-  const segments = data.perKategori.slice(0, 5).map((k, i) => ({
+  const H = 220;
+  const TOP = 8;
+  const LX = 150; // kolom sumber pemasukan
+  const CX = 330; // simpul pusat
+  const RX = 510; // kolom pengeluaran dan sisa
+  const NW = 12;
+  const sisaPos = Math.max(data.sisaBersih, 0);
+  const outTotal = data.pengeluaran + sisaPos;
+  const scaleBase = Math.max(data.pemasukan, outTotal);
+
+  const sources = data.sumberPemasukan.filter((s) => s.total > 0).slice(0, 6);
+  const expense = data.perKategori.slice(0, 5).map((k, i) => ({
     label: k.kategori,
     value: k.total,
     color: PALETTE[i % PALETTE.length],
   }));
-  const rest = data.perKategori.slice(5).reduce((sum, k) => sum + k.total, 0);
-  if (rest > 0) segments.push({ label: 'Lainnya', value: rest, color: '#94a3b8' });
-  if (data.sisaBersih > 0) segments.push({ label: 'Sisa (tabungan)', value: data.sisaBersih, color: '#16a34a' });
+  const restExp = data.perKategori.slice(5).reduce((sum, k) => sum + k.total, 0);
+  if (restExp > 0) expense.push({ label: 'Lainnya', value: restExp, color: '#94a3b8' });
+  if (sisaPos > 0) expense.push({ label: 'Sisa (tabungan)', value: sisaPos, color: '#16a34a' });
+
+  const scale = scaleBase > 0 ? H / scaleBase : 0;
+  const ribbon = (x0: number, x1: number, a0: number, a1: number, b0: number, b1: number) => {
+    const xm = (x0 + x1) / 2;
+    return `M${x0},${a0} C${xm},${a0} ${xm},${b0} ${x1},${b0} L${x1},${b1} C${xm},${b1} ${xm},${a1} ${x0},${a1} Z`;
+  };
+
+  // Sumber pemasukan -> pusat
+  let yl = TOP;
+  let cIn = TOP;
+  const inNodes = sources.map((s, i) => {
+    const h = s.total * scale;
+    const node = { ...s, y: yl, h, color: PALETTE[(i + 3) % PALETTE.length] };
+    const path = ribbon(LX + NW, CX, yl, yl + h, cIn, cIn + h);
+    cIn += h;
+    yl += h + 4;
+    return { node, path };
+  });
+
+  // Pusat -> pengeluaran dan sisa
+  let cOut = TOP;
+  let yr = TOP;
+  const outNodes = expense.map((e) => {
+    const h = e.value * scale;
+    const node = { ...e, y: yr, h };
+    const path = ribbon(CX + NW, RX, cOut, cOut + h, yr, yr + h);
+    cOut += h;
+    yr += h + 4;
+    return { node, path };
+  });
+
+  const centerH = scaleBase * scale;
+  const hasFlow = scaleBase > 0;
+  const svgH = TOP * 2 + H + 4;
 
   return (
     <Card className={CARD}>
       <SectionHeader
         icon={<ArrowLeftRight className="h-5 w-5" />}
         title="Aliran Dana"
-        subtitle="Ke mana pemasukanmu pergi"
+        subtitle="Dari sumber pemasukan ke pengeluaran dan sisa"
       />
 
-      {base > 0 ? (
+      {hasFlow ? (
         <>
-          <div className="mt-4 flex h-4 w-full overflow-hidden rounded-full bg-[#e0f2fe]" aria-hidden="true">
-            {segments.map((s) => (
-              <span
-                key={s.label}
-                title={`${s.label}: ${formatIDR(s.value)}`}
-                className="block h-full"
-                style={{ width: `${(s.value / base) * 100}%`, background: s.color }}
-              />
+          <svg
+            viewBox={`0 0 680 ${svgH}`}
+            className="mt-4 hidden h-auto w-full sm:block"
+            role="img"
+            aria-label={`Aliran dana: pemasukan ${formatIDR(data.pemasukan)}, pengeluaran ${formatIDR(data.pengeluaran)}, sisa ${formatIDR(data.sisaBersih)}`}
+          >
+            {inNodes.map(({ node, path }) => (
+              <path key={`in-${node.kategori}`} d={path} fill={node.color} opacity={0.35}>
+                <title>{`${node.kategori}: ${formatIDR(node.total)}`}</title>
+              </path>
             ))}
-          </div>
+            {outNodes.map(({ node, path }) => (
+              <path key={`out-${node.label}`} d={path} fill={node.color} opacity={0.35}>
+                <title>{`${node.label}: ${formatIDR(node.value)}`}</title>
+              </path>
+            ))}
+
+            {inNodes.map(({ node }) => (
+              <rect key={`inn-${node.kategori}`} x={LX} y={node.y} width={NW} height={Math.max(node.h, 2)} fill={node.color} rx={2} />
+            ))}
+            <rect x={CX} y={TOP} width={NW} height={Math.max(centerH, 2)} fill="#0b1f3a" rx={2} />
+            {outNodes.map(({ node }) => (
+              <rect key={`outn-${node.label}`} x={RX} y={node.y} width={NW} height={Math.max(node.h, 2)} fill={node.color} rx={2} />
+            ))}
+
+            {inNodes.map(({ node }) =>
+              node.h >= 14 ? (
+                <text key={`inl-${node.kategori}`} x={LX - 8} y={node.y + node.h / 2} textAnchor="end" dominantBaseline="middle" className="fill-[#172554] text-[11px] font-semibold">
+                  {truncate(node.kategori, 20)}
+                </text>
+              ) : null,
+            )}
+            <text x={CX + NW / 2} y={TOP + centerH + 16} textAnchor="middle" className="fill-[#172554] text-[11px] font-bold">
+              Total
+            </text>
+            {outNodes.map(({ node }) =>
+              node.h >= 14 ? (
+                <text key={`outl-${node.label}`} x={RX + NW + 8} y={node.y + node.h / 2} dominantBaseline="middle" className="fill-[#172554] text-[11px] font-semibold">
+                  {truncate(node.label, 20)}
+                </text>
+              ) : null,
+            )}
+          </svg>
+
           <ul className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-            {segments.map((s) => (
+            {expense.map((s) => (
               <li key={s.label} className="flex items-center gap-2 text-xs">
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate font-semibold text-[#172554]">{s.label}</span>
-                <span className="font-bold tnum text-[#172554]">{formatIDR(s.value)}</span>
-                <span className="w-10 text-right font-bold tnum text-[#5b6f99]">{((s.value / base) * 100).toFixed(0)}%</span>
+                <span className="font-bold text-[#172554]">{formatIDR(s.value)}</span>
+                <span className="w-10 text-right font-bold text-[#5b6f99]">{((s.value / Math.max(data.pemasukan, 1)) * 100).toFixed(0)}%</span>
               </li>
             ))}
           </ul>
@@ -572,7 +654,7 @@ function FlowCard({ data, loading }: { data: AnalisaData | null; loading: boolea
             {data.sumberPemasukan.map((s) => (
               <li key={s.kategori} className="flex items-center justify-between gap-3 text-xs">
                 <span className="min-w-0 truncate font-semibold text-[#172554]">{s.kategori}</span>
-                <span className="shrink-0 font-bold tnum text-[#047857]">+ {formatIDR(s.total)}</span>
+                <span className="shrink-0 font-bold text-[#047857]">+ {formatIDR(s.total)}</span>
               </li>
             ))}
           </ul>
@@ -589,6 +671,118 @@ function FlowCard({ data, loading }: { data: AnalisaData | null; loading: boolea
       <span className="sr-only">
         Ringkasan: pemasukan {formatIDR(data.pemasukan)}, pengeluaran {formatIDR(data.pengeluaran)}.
       </span>
+    </Card>
+  );
+}
+
+function truncate(s: string, n: number): string {
+  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+}
+
+/* ---------- Insight AI ---------- */
+
+type AiState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; insights: string[]; hemat: string[] }
+  | { status: 'error'; message: string };
+
+function AiInsightCard({ data, periodLabel, loading }: { data: AnalisaData | null; periodLabel: string; loading: boolean }) {
+  const [state, setState] = useState<AiState>({ status: 'idle' });
+
+  // Hasil AI hanya berlaku untuk periode yang sedang tampil.
+  useEffect(() => {
+    setState({ status: 'idle' });
+  }, [periodLabel]);
+
+  if (loading || !data) return <CardSkeleton rows={4} />;
+
+  const run = async () => {
+    setState({ status: 'loading' });
+    const res = await fetchAiAnalysis({ periode: periodLabel, data });
+    if (res.error || !res.data) {
+      setState({ status: 'error', message: res.error ?? 'AI belum bisa membuat insight.' });
+      return;
+    }
+    setState({ status: 'ready', insights: res.data.insights, hemat: res.data.hemat });
+  };
+
+  const hasNoData = data.pengeluaran === 0 && data.pemasukan === 0;
+
+  return (
+    <Card className={CARD}>
+      <div className="flex items-start justify-between gap-3">
+        <SectionHeader icon={<Sparkles className="h-5 w-5" />} title="Insight AI" subtitle="Dibuat AI dari ringkasan angka periode ini" />
+        {state.status !== 'loading' && (
+          <button
+            type="button"
+            onClick={run}
+            disabled={hasNoData}
+            className="shrink-0 rounded-full bg-[#2563eb] px-3 py-1.5 text-xs font-extrabold text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {state.status === 'ready' ? 'Perbarui' : 'Buat insight'}
+          </button>
+        )}
+      </div>
+
+      {state.status === 'idle' && (
+        <p className="mt-4 text-sm font-medium text-[#5b6f99]">
+          {hasNoData
+            ? 'Belum ada transaksi di periode ini, jadi AI belum punya data untuk dianalisa.'
+            : 'Tekan "Buat insight" untuk meminta AI membaca ringkasan periode ini. Hanya angka ringkasan yang dikirim, bukan deskripsi transaksi.'}
+        </p>
+      )}
+
+      {state.status === 'loading' && (
+        <div className="mt-4 space-y-2" role="status" aria-live="polite">
+          <p className="flex items-center gap-2 text-sm font-semibold text-[#31548a]">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> AI sedang membaca ringkasan...
+          </p>
+          <Skeleton className="h-4 w-11/12 bg-[#dbeafe]" />
+          <Skeleton className="h-4 w-8/12 bg-[#dbeafe]" />
+        </div>
+      )}
+
+      {state.status === 'error' && (
+        <div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-2.5 text-sm">
+          <p className="font-semibold text-[#92400e]">{state.message}</p>
+          <p className="mt-1 text-xs text-[#92400e]">Ringkasan angka di atas tetap bisa dipakai.</p>
+          <button type="button" onClick={run} className="mt-2 text-xs font-extrabold text-[#1d4ed8] underline underline-offset-2">
+            Coba lagi
+          </button>
+        </div>
+      )}
+
+      {state.status === 'ready' && (
+        <div className="mt-4 space-y-5">
+          {state.insights.length > 0 ? (
+            <ul className="space-y-3">
+              {state.insights.map((text, i) => (
+                <li key={i} className="flex gap-2 text-sm font-medium leading-relaxed text-[#172554]">
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb]" aria-hidden="true" />
+                  <span>{text}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm font-medium text-[#5b6f99]">AI belum menemukan insight dari data ini.</p>
+          )}
+
+          {state.hemat.length > 0 && (
+            <div className="border-t border-[#e0f2fe] pt-4">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-[#5b6f99]">Saran hemat</p>
+              <ul className="mt-2 space-y-2">
+                {state.hemat.map((text, i) => (
+                  <li key={i} className="flex gap-2 text-sm font-medium leading-relaxed text-[#172554]">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#16a34a]" aria-hidden="true" />
+                    <span>{text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }
