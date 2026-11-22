@@ -486,6 +486,8 @@ export interface Subkategori {
   kategori: string;
   jenis: TransactionType;
   budgeting: Budgeting | null;
+  /** Kata kunci untuk tebakan otomatis dari deskripsi transaksi. */
+  keywords: string[];
 }
 
 export interface BudgetLimit {
@@ -519,6 +521,7 @@ interface SubkategoriDbRow {
   kategori: string;
   jenis: string;
   budgeting: string | null;
+  keywords: string[] | null;
 }
 
 interface BudgetDbRow {
@@ -541,10 +544,24 @@ interface TxAggDbRow {
   subkategori_id: string | null;
 }
 
+function subkategoriFromRow(r: SubkategoriDbRow): Subkategori {
+  return {
+    id: r.id,
+    nama: r.nama,
+    kategori: r.kategori,
+    jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+    budgeting: (r.budgeting as Budgeting | null) ?? null,
+    keywords: r.keywords ?? [],
+  };
+}
+
 export async function fetchBudgetData(range: { start: string; end: string }): Promise<BudgetData> {
   try {
     const [subRes, budRes, goalRes, txRes] = await Promise.all([
-      supabase.from('subkategori').select('id,nama,kategori,jenis,budgeting').order('nama', { ascending: true }),
+      supabase
+        .from('subkategori')
+        .select('id,nama,kategori,jenis,budgeting,keywords')
+        .order('nama', { ascending: true }),
       supabase.from('budgets').select('id,subkategori_id,limit_amount'),
       supabase.from('goals').select('id,nama,target,terkumpul,deadline').order('created_at', { ascending: true }),
       supabase
@@ -558,13 +575,7 @@ export async function fetchBudgetData(range: { start: string; end: string }): Pr
     if (goalRes.error) throw goalRes.error;
     if (txRes.error) throw txRes.error;
 
-    const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[]).map((r) => ({
-      id: r.id,
-      nama: r.nama,
-      kategori: r.kategori,
-      jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
-      budgeting: (r.budgeting as Budgeting | null) ?? null,
-    }));
+    const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[]).map(subkategoriFromRow);
     const kategoriById = new Map(subkategori.map((s) => [s.id, s.kategori]));
 
     let pemasukan = 0;
@@ -651,16 +662,10 @@ export async function deleteGoalRow(id: string): Promise<WriteResult> {
 export async function fetchSubkategori(): Promise<Subkategori[]> {
   const { data, error } = await supabase
     .from('subkategori')
-    .select('id,nama,kategori,jenis,budgeting')
+    .select('id,nama,kategori,jenis,budgeting,keywords')
     .order('nama', { ascending: true });
   if (error || !data) return [];
-  return (data as SubkategoriDbRow[]).map((r) => ({
-    id: r.id,
-    nama: r.nama,
-    kategori: r.kategori,
-    jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
-    budgeting: (r.budgeting as Budgeting | null) ?? null,
-  }));
+  return (data as SubkategoriDbRow[]).map(subkategoriFromRow);
 }
 
 /**
@@ -681,6 +686,37 @@ export function matchSubkategori(
   if (exact) return exact;
   const fallbackNama = jenis === 'Pemasukan' ? 'Pendapatan Lainnya' : 'Lain-lain';
   return sameJenis.find((s) => s.nama === fallbackNama);
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Tebakan subkategori dari deskripsi memakai kata kunci dari database.
+ * Kata kunci harus berdiri sendiri (dibatasi spasi atau tanda baca), dan
+ * kata kunci terpanjang yang cocok menang, supaya "gofood" lebih kuat dari "food".
+ */
+export function suggestSubkategori(
+  list: Subkategori[],
+  deskripsi: string,
+  jenis: TransactionType,
+): Subkategori | undefined {
+  const text = deskripsi.trim().toLowerCase();
+  if (!text) return undefined;
+  let best: { sub: Subkategori; len: number } | undefined;
+  for (const s of list) {
+    if (s.jenis !== jenis) continue;
+    for (const raw of s.keywords) {
+      const kw = raw.trim().toLowerCase();
+      if (!kw) continue;
+      const pattern = new RegExp(`(^|[^a-z0-9])${escapeRegex(kw)}([^a-z0-9]|$)`);
+      if (pattern.test(text) && (!best || kw.length > best.len)) {
+        best = { sub: s, len: kw.length };
+      }
+    }
+  }
+  return best?.sub;
 }
 
 /* ---------- Sprint 5: analisa (fungsi database report_summary) ---------- */
