@@ -412,7 +412,7 @@ export function AddTransactionSheet({
             )}
           </div>
 
-          <SheetFooter className="sticky bottom-0 mt-auto shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
+          <SheetFooter className="sticky bottom-0 mt-auto shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t border-border bg-card px-5 pt-4 pb-[max(4rem,env(safe-area-inset-bottom))] sm:px-6">
             {editing && onDelete && (
               <Button type="button" variant="outline" onClick={onDelete} disabled={submitting} className="mr-auto h-11 gap-2 rounded-xl border-rose-400/40 font-extrabold text-rose-600 hover:bg-rose-500/10 hover:text-rose-600">
                 <Trash2 className="h-4 w-4" /> Hapus
