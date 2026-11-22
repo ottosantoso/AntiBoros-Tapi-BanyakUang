@@ -3,6 +3,8 @@ import type { LucideIcon } from 'lucide-react';
 import {
   CheckCircle2,
   Car,
+  ChevronLeft,
+  ChevronRight,
   Gamepad2,
   GraduationCap,
   Heart,
@@ -49,6 +51,10 @@ const RULE: { key: Budgeting; label: string; pct: number; bar: string }[] = [
 
 const PALETTE = ['#2563eb', '#f97316', '#059669', '#8b5cf6', '#06b6d4', '#e11d48', '#94a3b8'];
 
+/** Jumlah baris di tampilan ringkas, dan jumlah baris per halaman di Lihat Semua. */
+const PREVIEW_COUNT = 6;
+const PAGE_SIZE = 10;
+
 const ICON_RULES: [RegExp, LucideIcon][] = [
   [/makan|jajan|kopi/i, Utensils],
   [/transport|bensin|parkir|tol|ojek|angkutan/i, Car],
@@ -87,6 +93,8 @@ export function BudgetView({ onOpenInsight }: { onOpenInsight?: () => void }) {
   const [range] = useState(periodeBulanIni);
   const [data, setData] = useState<BudgetData | null>(null);
   const [query, setQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  const [page, setPage] = useState(1);
 
   const reload = useCallback(async () => {
     const res = await fetchBudgetData(range);
@@ -151,7 +159,20 @@ export function BudgetView({ onOpenInsight }: { onOpenInsight?: () => void }) {
   const sisa = view.totalLimit - view.spentBudgeted;
   const sliceTotal = view.slices.reduce((a, s) => a + s.value, 0);
   const limitBy = new Map(data.budgets.map((b) => [b.subkategoriId, b]));
-  const filtered = view.rows.filter((r) => r.sub.nama.toLowerCase().includes(query.trim().toLowerCase()));
+
+  // Daftar batas: pencarian menyaring semua subkategori. Tanpa pencarian, tampilan ringkas
+  // menampilkan sebagian; "Lihat Semua" membuka daftar lengkap dengan paginasi.
+  const keyword = query.trim().toLowerCase();
+  const filtered = view.rows.filter((r) => r.sub.nama.toLowerCase().includes(keyword));
+  const isSearching = keyword.length > 0;
+  const expanded = showAll || isSearching;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visible = expanded
+    ? filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+    : filtered.slice(0, PREVIEW_COUNT);
+  const rangeStart = expanded ? (safePage - 1) * PAGE_SIZE + 1 : 1;
+  const rangeEnd = expanded ? Math.min(safePage * PAGE_SIZE, filtered.length) : Math.min(PREVIEW_COUNT, filtered.length);
 
   return (
     <div className="mx-auto grid w-full min-w-0 max-w-[1200px] gap-4 md:gap-5">
@@ -321,7 +342,15 @@ export function BudgetView({ onOpenInsight }: { onOpenInsight?: () => void }) {
           <label className="relative w-full md:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <span className="sr-only">Cari subkategori</span>
-            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari subkategori..." className="pl-9" />
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Cari subkategori..."
+              className="pl-9"
+            />
           </label>
         </div>
 
@@ -330,18 +359,64 @@ export function BudgetView({ onOpenInsight }: { onOpenInsight?: () => void }) {
             {view.rows.length === 0 ? 'Belum ada subkategori pengeluaran.' : 'Subkategori tidak ditemukan.'}
           </p>
         ) : (
-          <div className="grid gap-x-6 xl:grid-cols-2">
-            {filtered.map((r) => (
-              <BudgetRow
-                key={r.sub.id}
-                sub={r.sub}
-                spent={r.spent}
-                budgetId={limitBy.get(r.sub.id)?.id ?? null}
-                limit={limitBy.get(r.sub.id)?.limit ?? null}
-                onChanged={reload}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-x-6 xl:grid-cols-2">
+              {visible.map((r) => (
+                <BudgetRow
+                  key={r.sub.id}
+                  sub={r.sub}
+                  spent={r.spent}
+                  budgetId={limitBy.get(r.sub.id)?.id ?? null}
+                  limit={limitBy.get(r.sub.id)?.limit ?? null}
+                  onChanged={reload}
+                />
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground">
+                Menampilkan {rangeStart}–{rangeEnd} dari {filtered.length} subkategori
+              </p>
+
+              {expanded && totalPages > 1 ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                    disabled={safePage <= 1}
+                    aria-label="Halaman sebelumnya"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="min-w-[88px] text-center text-xs font-semibold tnum">
+                    Hal. {safePage} dari {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                    disabled={safePage >= totalPages}
+                    aria-label="Halaman berikutnya"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : null}
+
+              {!isSearching && filtered.length > PREVIEW_COUNT ? (
+                showAll ? (
+                  <Button variant="ghost" size="sm" onClick={() => { setShowAll(false); setPage(1); }}>
+                    Tutup daftar
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => setShowAll(true)}>
+                    Lihat Semua ({filtered.length})
+                  </Button>
+                )
+              ) : null}
+            </div>
+          </>
         )}
       </Card>
 
