@@ -2,7 +2,6 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   ArrowLeftRight,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
   Inbox,
@@ -125,7 +124,11 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
   }, [mode, ym, year, from, to]);
 
   const periodLabel =
-    mode === 'tahun' ? `Tahun ${year}` : mode === 'rentang' ? `${ymLabel(from <= to ? from : to)} – ${ymLabel(from <= to ? to : from)}` : ymLabel(ym);
+    mode === 'tahun'
+      ? `Tahun ${year}`
+      : mode === 'rentang'
+        ? `${ymLabel(from <= to ? from : to)} – ${ymLabel(from <= to ? to : from)}`
+        : ymLabel(ym);
 
   const { data, status, error, reload } = useAnalisa(range, syncKey);
   const loading = status === 'loading';
@@ -157,7 +160,10 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
           role="alert"
           className="flex flex-col gap-1 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between"
         >
-          <span>Analisa belum bisa dimuat: {error ?? 'terjadi kesalahan.'} Coba lagi sebentar lagi.</span>
+          <span className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>Analisa belum bisa dimuat: {error ?? 'terjadi kesalahan.'} Coba lagi sebentar lagi.</span>
+          </span>
           <button
             type="button"
             onClick={reload}
@@ -586,9 +592,3 @@ function FlowCard({ data, loading }: { data: AnalisaData | null; loading: boolea
     </Card>
   );
 }
-
-/* Ikon dipakai di header halaman lewat file lain; diekspor agar konsisten. */
-export const AnalisaIcon = BarChart3;
-
-/* Peringatan: AlertTriangle dipakai untuk status galat bila diperlukan di versi berikutnya. */
-export const AnalisaAlertIcon = AlertTriangle;
