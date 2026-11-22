@@ -33,11 +33,18 @@ import { formatIDR } from '@/lib/format';
 import { normalizeLogo } from '@/lib/logo';
 import type { TransactionType, Wallet } from '@/lib/types';
 import { BANK_PROVIDERS, EWALLET_PROVIDERS, OTHER_PROVIDER_CODE, providerLogo } from '@/lib/wallet-providers';
+import { cn } from '@/lib/utils';
 
 type JenisPilihan = 'bank' | 'ewallet';
 
 /** Kode provider untuk dompet tunai, sama dengan yang dipakai di form Tambah Dompet. */
 const TUNAI_PROVIDER = 'CASH';
+
+/**
+ * Footer tombol dinaikkan dari tepi bawah. Badge "Powered by Netlify" tampil di pojok kanan bawah
+ * saat production dan menutupi tombol Simpan. Area aman iPhone tetap diperhitungkan.
+ */
+const FOOTER_PADDING_BAWAH = 'pb-[max(4rem,env(safe-area-inset-bottom))] md:pb-[max(4.5rem,env(safe-area-inset-bottom))]';
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml';
@@ -354,7 +361,7 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
           </section>
         </div>
 
-        <SheetFooter className="flex-row gap-3 border-t border-border px-6 py-4">
+        <SheetFooter className={cn('flex-row gap-3 border-t border-border px-6 pt-4', FOOTER_PADDING_BAWAH)}>
           <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>
             Batal
           </Button>
