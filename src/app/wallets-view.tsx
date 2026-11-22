@@ -27,6 +27,9 @@ import {
 import { EditWalletSheet } from '@/components/edit-wallet-sheet';
 import { formatIDR, formatIDRCompact } from '@/lib/format';
 import { getWalletMeta } from '@/lib/wallets';
+import { PaginationBar, usePagination } from '@/components/pagination-bar';
+
+const ARCHIVED_PAGE_SIZE = 10;
 
 /** Angka saldo yang disamarkan saat mode sembunyi aktif. */
 const MASKED = 'Rp •••••••';
@@ -52,6 +55,7 @@ export function WalletsView({
   const negativeTotal = negative.reduce((s, w) => s + w.saldo, 0);
 
   const [archived, setArchived] = useState<ArchivedWallet[]>([]);
+  const archivedPage = usePagination(archived, ARCHIVED_PAGE_SIZE, '');
   const [target, setTarget] = useState<Wallet | null>(null);
   const [editTarget, setEditTarget] = useState<Wallet | null>(null);
   const [busy, setBusy] = useState(false);
@@ -238,7 +242,7 @@ export function WalletsView({
             </p>
           </div>
           <div className="divide-y divide-border/60">
-            {archived.map((w) => {
+            {archivedPage.pageItems.map((w) => {
               const meta = getWalletMeta(w);
               return (
                 <div key={w.id} className="flex items-center gap-4 px-5 py-3.5 opacity-75">
@@ -262,6 +266,17 @@ export function WalletsView({
                 </div>
               );
             })}
+          </div>
+          <div className="px-5 pb-4">
+            <PaginationBar
+              page={archivedPage.page}
+              totalPages={archivedPage.totalPages}
+              total={archivedPage.total}
+              from={archivedPage.from}
+              to={archivedPage.to}
+              setPage={archivedPage.setPage}
+              noun="dompet diarsipkan"
+            />
           </div>
         </Card>
       )}
