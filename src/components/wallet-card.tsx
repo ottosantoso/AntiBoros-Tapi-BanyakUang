@@ -25,7 +25,8 @@ export function WalletCard({
   return (
     <div
       className={cn(
-        'lift group relative aspect-[1.6/1] w-full overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg transition-all duration-300 hover:shadow-xl',
+        // Tinggi pakai min-h, bukan aspect-ratio: di iOS Safari aspect-ratio + h-full membuat nominal terpotong.
+        'lift group relative flex min-h-[14rem] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg transition-all duration-300 hover:shadow-xl sm:min-h-[15rem] sm:p-5',
         meta.gradient,
       )}
       style={{ animationDelay: `${index * 60}ms` }}
@@ -34,7 +35,7 @@ export function WalletCard({
       <div className="pointer-events-none absolute -right-8 -top-12 h-32 w-32 rounded-full bg-white/15 blur-2xl" />
       <div className="pointer-events-none absolute -bottom-10 -left-6 h-28 w-28 rounded-full bg-black/10 blur-2xl" />
 
-      <div className="relative flex h-full flex-col justify-between">
+      <div className="relative flex flex-1 flex-col justify-between gap-3">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wider text-white/70">Dompet</p>
@@ -64,7 +65,7 @@ export function WalletCard({
 
         <div>
           <p className="text-[11px] font-medium text-white/70">Saldo tersisa</p>
-          <p className="font-display text-xl font-bold tnum leading-tight">
+          <p className="font-display text-xl font-bold tnum leading-tight sm:text-2xl whitespace-nowrap">
             {sembunyi ? (
               MASKED
             ) : (
@@ -88,7 +89,7 @@ export function WalletCard({
 
 export function WalletCardSkeleton() {
   return (
-    <div className="aspect-[1.6/1] w-full animate-pulse rounded-2xl bg-muted" />
+    <div className="min-h-[14rem] w-full animate-pulse rounded-2xl bg-muted sm:min-h-[15rem]" />
   );
 }
 
