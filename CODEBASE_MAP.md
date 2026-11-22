@@ -125,3 +125,16 @@ Yang masih tersisa:
 - `src/app/budget-view.tsx`: menu Budget (sidebar, header, select mobile, App.tsx). Berisi ringkasan 50/30/20, batas per subkategori, dan target tabungan (isi terkumpul manual).
 - PR #13: dropdown subkategori di form transaksi (`add-transaction-sheet.tsx`), pemetaan kategori AI ke subkategori di scanner (`scanner-view.tsx`, `matchSubkategori` di `data.ts`), dan penyesuaian saldo memakai subkategori `Penyesuaian Saldo` (`edit-wallet-sheet.tsx`).
 - Belum diuji di browser: tambah dan edit transaksi, scan struk dan mutasi, penyesuaian saldo, menu Budget.
+
+## Sprint 6: master kategori & transaksi berulang (status)
+
+- Migrasi `20261122160000_kategori_master_berulang.sql` (sudah diterapkan ke project `bdaoftrmiesxioinsxlp`):
+  - Tabel `kategori` (master level 1, per akun, RLS pemilik) dan kolom `subkategori.is_system`, `aktif`, `urutan`.
+  - Seed master dari Excel "Hepeng History New Generation 4" lewat fungsi `seed_master_akun`. Berlaku untuk akun baru dan backfill akun lama. Subkategori lama di luar master dinonaktifkan, tidak dihapus.
+  - Trigger `subkategori_guard_system` dan `kategori_guard_system` melarang ubah, nonaktifkan, atau hapus item sistem.
+  - Tabel `transaksi_berulang` dan fungsi `proses_transaksi_berulang()` (dipanggil dari `fetchDashboardData`, idempoten).
+- `src/lib/data.ts`: `fetchSubkategori` hanya mengembalikan yang aktif. `fetchBudgetData` memakai flag `isSystem` (bukan lagi nama). CRUD kategori, subkategori, dan transaksi berulang ada di bagian "Master kategori & subkategori" dan "Transaksi berulang".
+- `src/app/master-kategori-settings.tsx`: CRUD kategori dan subkategori di Pengaturan.
+- `src/app/berulang-settings.tsx`: CRUD transaksi berulang di Pengaturan.
+- `NON_REAL_KATEGORI` masih diekspor untuk kompatibilitas. Belum dipakai di jalur agregasi.
+- Belum dikerjakan di sprint ini: filter dan pagination di Transaksi (3.5), agregasi per kategori dan notifikasi 50/80/100% di Budget (3.3), preset 3 dan 6 bulan (3.4), jenis tunai dan nomor rekening di Dompet (3.2, K2, K3), dan target tabungan bulanan (K5).

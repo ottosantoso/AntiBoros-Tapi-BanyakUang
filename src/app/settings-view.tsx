@@ -1,5 +1,7 @@
 import { Clock, Info, ShieldCheck, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { MasterKategoriSettings } from '@/app/master-kategori-settings';
+import { BerulangSettings } from '@/app/berulang-settings';
 
 interface Props {
   onSaved?: () => void;
@@ -8,7 +10,6 @@ interface Props {
 const COMING_SOON = [
   'Profil: nama dan foto',
   'Preferensi: bahasa dan format tanggal',
-  'Kategori dan subkategori: tambah, ubah, sembunyikan',
   'Notifikasi: pengingat budget dan transaksi berulang',
   'Backup dan ekspor data',
 ];
@@ -49,6 +50,10 @@ export function SettingsView(_props: Props) {
           </li>
         </ul>
       </Card>
+
+      <MasterKategoriSettings />
+
+      <BerulangSettings />
 
       <Card className="p-6">
         <div className="flex items-start gap-3">
