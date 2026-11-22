@@ -38,6 +38,12 @@ function thisYearRange(now = new Date()): DateRangeValue {
 
 const ALL_TIME: DateRangeValue = { from: undefined, to: undefined };
 
+/** Rentang satu bulan penuh untuk tahun dan bulan (monthIndex 0 = Januari). */
+export function monthRange(year: number, monthIndex: number): DateRangeValue {
+  const first = new Date(year, monthIndex, 1);
+  return { from: startOfMonth(first), to: endOfMonth(first) };
+}
+
 export function getPresets(now = new Date()): Preset[] {
   return [
     { id: 'thisMonth', label: 'Bulan Ini', range: thisMonthRange(now) },
