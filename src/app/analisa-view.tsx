@@ -1,27 +1,44 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  Activity,
   AlertTriangle,
-  ArrowLeftRight,
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Download,
   Inbox,
   Lightbulb,
+  Loader2,
   PieChart as PieChartIcon,
   PiggyBank,
-  Trophy,
   Sparkles,
-  Loader2,
+  Target,
+  Trophy,
+  TrendingDown,
+  Wallet,
 } from 'lucide-react';
+import { Area, AreaChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MetricCard } from '@/components/metric-card';
-import { CashflowChart } from '@/components/cashflow-charts';
 import { useAnalisa } from '@/lib/use-analisa';
 import { fetchAiAnalysis, type AnalisaData } from '@/lib/data';
+import type { MonthlyTrend } from '@/lib/types';
 import { formatIDR } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 type Mode = 'bulan' | 'rentang' | 'tahun';
+type ChangeKey = 'pemasukan' | 'pengeluaran' | 'net';
+type Tone = 'blue' | 'red' | 'green' | 'purple';
+
+interface TrendRow {
+  bulan: string;
+  pemasukan: number;
+  pengeluaran: number;
+  net: number;
+}
 
 const MODES: { id: Mode; label: string }[] = [
   { id: 'bulan', label: 'Satu bulan' },
@@ -34,9 +51,16 @@ const MONTHS = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
 
-const CARD = 'rounded-2xl border-[#dbeafe] bg-white p-5 shadow-[0_6px_18px_rgba(30,64,175,0.06)]';
-const PALETTE = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#a5b4fc', '#f43f5e', '#14b8a6', '#64748b'];
+const CARD = 'rounded-2xl border border-[#dbeafe] bg-white p-5 shadow-[0_6px_18px_rgba(30,64,175,0.06)]';
+const PALETTE = ['#2563eb', '#f59e0b', '#10b981', '#8b5cf6', '#f43f5e', '#14b8a6', '#64748b'];
 const SAVINGS_TARGET = 20;
+
+const TONE: Record<Tone, { card: string; icon: string; stroke: string }> = {
+  blue: { card: 'border-[#bfdbfe] bg-gradient-to-br from-[#eff6ff] to-white', icon: 'bg-[#dbeafe] text-[#2563eb]', stroke: '#2563eb' },
+  red: { card: 'border-[#fecdd3] bg-gradient-to-br from-[#fff1f2] to-white', icon: 'bg-[#ffe4e6] text-[#e11d48]', stroke: '#e11d48' },
+  green: { card: 'border-[#bbf7d0] bg-gradient-to-br from-[#f0fdf4] to-white', icon: 'bg-[#dcfce7] text-[#16a34a]', stroke: '#16a34a' },
+  purple: { card: 'border-[#e9d5ff] bg-gradient-to-br from-[#faf5ff] to-white', icon: 'bg-[#f3e8ff] text-[#7c3aed]', stroke: '#7c3aed' },
+};
 
 /* ---------- Helper tanggal (YYYY-MM) ---------- */
 
@@ -67,42 +91,60 @@ function endOfMonth(ym: string): string {
   return `${ym}-${pad(new Date(y, m, 0).getDate())}`;
 }
 
-function formatDay(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  return `${d} ${(MONTHS[m - 1] ?? '').slice(0, 3)} ${y}`;
+/** Angka ringkas untuk sumbu grafik, misalnya "Rp 6 jt". */
+function short(n: number): string {
+  const a = Math.abs(n);
+  if (a >= 1_000_000_000) return `Rp ${(n / 1_000_000_000).toFixed(1)} M`;
+  if (a >= 1_000_000) return `Rp ${(n / 1_000_000).toFixed(1).replace('.0', '')} jt`;
+  if (a >= 1_000) return `Rp ${Math.round(n / 1_000)} rb`;
+  return `Rp ${Math.round(n)}`;
 }
 
-/* ---------- Insight otomatis (aturan sederhana, bukan AI) ---------- */
+/* ---------- Perhitungan ---------- */
+
+function monthValue(t: MonthlyTrend, key: ChangeKey): number {
+  if (key === 'net') return t.pemasukan - t.pengeluaran;
+  return t[key];
+}
+
+/**
+ * Perubahan dibanding bulan sebelumnya (persen). Hanya untuk mode satu bulan,
+ * karena tren 6 bulan berakhir di bulan periode.
+ */
+function changeOf(d: AnalisaData | null, mode: Mode, key: ChangeKey): number | null {
+  if (!d || mode !== 'bulan' || d.tren.length < 2) return null;
+  const cur = monthValue(d.tren[d.tren.length - 1], key);
+  const prev = monthValue(d.tren[d.tren.length - 2], key);
+  if (prev === 0) return null;
+  return ((cur - prev) / Math.abs(prev)) * 100;
+}
 
 function buildInsights(d: AnalisaData, mode: Mode): string[] {
   const out: string[] = [];
   const top = d.perKategori[0];
   if (top && d.pengeluaran > 0) {
-    out.push(`${top.kategori} jadi pengeluaran terbesar: ${formatIDR(top.total)} (${top.persen.toFixed(0)}% dari total pengeluaran).`);
+    out.push(`Pengeluaran terbesar ada di kategori ${top.kategori} (${top.persen.toFixed(0)}%). Pertimbangkan untuk mengurangi pengeluaran di kategori ini.`);
   }
   if (d.rasioTabungan === null) {
     if (d.pengeluaran > 0) out.push('Belum ada pemasukan pada periode ini, jadi rasio tabungan belum bisa dihitung.');
   } else if (d.rasioTabungan < 0) {
     out.push(`Pengeluaran melebihi pemasukan sebesar ${formatIDR(Math.abs(d.sisaBersih))}. Mulai dari kategori terbesar untuk dikurangi.`);
   } else if (d.rasioTabungan >= SAVINGS_TARGET) {
-    out.push(`Rasio tabungan ${d.rasioTabungan.toFixed(0)}%, sudah di atas target ${SAVINGS_TARGET}%.`);
+    out.push(`Kamu berhasil menabung ${d.rasioTabungan.toFixed(0)}% dari pemasukan. Target idealnya minimal ${SAVINGS_TARGET}%.`);
   } else {
     const kurang = Math.max((d.pemasukan * SAVINGS_TARGET) / 100 - d.sisaBersih, 0);
-    out.push(`Rasio tabungan ${d.rasioTabungan.toFixed(0)}%, masih di bawah target ${SAVINGS_TARGET}%. Butuh sekitar ${formatIDR(kurang)} lagi untuk mencapainya.`);
+    out.push(`Kamu menabung ${d.rasioTabungan.toFixed(0)}% dari pemasukan. Target idealnya minimal ${SAVINGS_TARGET}%, butuh sekitar ${formatIDR(kurang)} lagi.`);
   }
-  if (mode === 'bulan' && d.tren.length >= 2) {
-    const cur = d.tren[d.tren.length - 1];
-    const prev = d.tren[d.tren.length - 2];
-    if (prev.pengeluaran > 0) {
-      const diff = ((cur.pengeluaran - prev.pengeluaran) / prev.pengeluaran) * 100;
-      out.push(`Pengeluaran ${diff >= 0 ? 'naik' : 'turun'} ${Math.abs(diff).toFixed(0)}% dibanding bulan sebelumnya.`);
-    }
+  const cur = changeOf(d, mode, 'pengeluaran');
+  if (cur !== null && cur < 0) {
+    out.push(`Pengeluaran turun ${Math.abs(cur).toFixed(0)}% dibanding bulan sebelumnya. Lanjutkan kebiasaan ini!`);
+  } else if (cur !== null && cur > 0) {
+    out.push(`Pengeluaran naik ${cur.toFixed(0)}% dibanding bulan sebelumnya. Cek kembali kategori yang membengkak.`);
   }
   if (d.transfer.biayaAdmin > 0) {
     out.push(`Biaya admin transfer ${formatIDR(d.transfer.biayaAdmin)} dari ${d.transfer.jumlah} transfer antar-dompet.`);
   }
-  return out.slice(0, 5);
+  return out.slice(0, 4);
 }
 
 /* ---------- Halaman ---------- */
@@ -137,11 +179,41 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
   const d = status === 'error' ? null : data;
   const isEmpty = status === 'ready' && d !== null && d.pemasukan === 0 && d.pengeluaran === 0;
 
-  const net = d?.sisaBersih ?? 0;
   const insights = useMemo(() => (d ? buildInsights(d, mode) : []), [d, mode]);
+  const trendRows = useMemo<TrendRow[]>(
+    () =>
+      d
+        ? d.tren.map((t) => ({
+            bulan: t.bulan,
+            pemasukan: t.pemasukan,
+            pengeluaran: t.pengeluaran,
+            net: t.pemasukan - t.pengeluaran,
+          }))
+        : [],
+    [d],
+  );
+
+  const chgIncome = changeOf(d, mode, 'pemasukan');
+  const chgExpense = changeOf(d, mode, 'pengeluaran');
+  const chgNet = changeOf(d, mode, 'net');
+  const net = d?.sisaBersih ?? 0;
+  const ratio = d?.rasioTabungan ?? null;
 
   return (
-    <div className="tabular-nums space-y-4">
+    <div className="tabular-nums space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-medium text-[#5b6f99]">Pantau pengeluaran dan pahami keuanganmu lebih dalam</p>
+        <button
+          type="button"
+          disabled
+          title="Segera hadir"
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-[#bfdbfe] bg-white px-4 text-xs font-extrabold text-[#31548a] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          Download Laporan
+        </button>
+      </div>
+
       <PeriodBar
         mode={mode}
         onMode={setMode}
@@ -201,32 +273,77 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
         status !== 'error' && (
           <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard metric="income" label="Pemasukan" value={d?.pemasukan ?? 0} loading={loading} />
-              <MetricCard metric="expense" label="Pengeluaran" value={d?.pengeluaran ?? 0} loading={loading} />
-              <MetricCard
-                metric={net >= 0 ? 'savings' : 'expense'}
-                label={net >= 0 ? 'Sisa Bersih' : 'Defisit'}
-                value={net}
+              <KpiCard
+                label="Pemasukan"
+                display={d ? formatIDR(d.pemasukan) : ''}
                 loading={loading}
+                tone="blue"
+                icon={<Wallet className="h-5 w-5" aria-hidden="true" />}
+                footer={<ChangeText value={chgIncome} goodWhenUp fallback="total pemasukan periode ini" />}
+                spark={trendRows}
+                sparkKey="pemasukan"
               />
-              <RatioCard ratio={d?.rasioTabungan ?? null} loading={loading} />
+              <KpiCard
+                label="Pengeluaran"
+                display={d ? formatIDR(d.pengeluaran) : ''}
+                loading={loading}
+                tone="red"
+                icon={<TrendingDown className="h-5 w-5" aria-hidden="true" />}
+                footer={<ChangeText value={chgExpense} goodWhenUp={false} fallback="total pengeluaran periode ini" />}
+                spark={trendRows}
+                sparkKey="pengeluaran"
+              />
+              <KpiCard
+                label={net >= 0 ? 'Sisa Bersih' : 'Defisit'}
+                display={d ? formatIDR(net) : ''}
+                loading={loading}
+                tone={net >= 0 ? 'green' : 'red'}
+                icon={<PiggyBank className="h-5 w-5" aria-hidden="true" />}
+                footer={<ChangeText value={chgNet} goodWhenUp fallback="pemasukan dikurangi pengeluaran" />}
+                spark={trendRows}
+                sparkKey="net"
+              />
+              <KpiCard
+                label="Rasio Tabungan"
+                display={loading ? '' : ratio === null ? '–' : `${ratio.toFixed(0)}%`}
+                loading={loading}
+                tone="purple"
+                icon={<Target className="h-5 w-5" aria-hidden="true" />}
+                footer={
+                  <div>
+                    <p className="text-xs font-medium text-[#5b6f99]">dari total pemasukan</p>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#ede9fe]" aria-hidden="true">
+                      <span
+                        className="block h-full rounded-full bg-[#7c3aed]"
+                        style={{ width: `${ratio === null ? 0 : Math.min(Math.max(ratio, 0), 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+              <div className="lg:col-span-3">
+                <TrendCard data={d} loading={loading} />
+              </div>
+              <div className="lg:col-span-2">
+                <InsightCard items={insights} data={d} periodLabel={periodLabel} loading={loading} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <CategoryCard data={d} loading={loading} />
+              <TopCard data={d} loading={loading} />
+              <SummaryCard data={d} loading={loading} chgIncome={chgIncome} chgExpense={chgExpense} chgNet={chgNet} />
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">
-                <CashflowChart data={d?.tren ?? []} loading={loading} />
+                <FlowCard data={d} loading={loading} />
               </div>
-              <InsightCard items={insights} loading={loading} />
+              <StatusCard data={d} loading={loading} />
             </div>
-
-            <AiInsightCard data={d} periodLabel={periodLabel} loading={loading} />
-
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <CategoryCard data={d} loading={loading} />
-              <TopCard data={d} loading={loading} />
-            </div>
-
-            <FlowCard data={d} loading={loading} />
           </>
         )
       )}
@@ -268,7 +385,7 @@ function PeriodBar({
     'h-11 rounded-xl border border-[#bfdbfe] bg-white px-3 text-sm font-semibold text-[#172554] outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb]';
 
   return (
-    <Card className={cn(CARD, 'space-y-3')}>
+    <Card className={cn(CARD, 'flex flex-wrap items-center justify-between gap-3 p-4')}>
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Pilih jenis periode">
         {MODES.map((m) => {
           const active = mode === m.id;
@@ -367,18 +484,106 @@ function StepButton({
   );
 }
 
-/* ---------- Kartu-kartu ---------- */
+/* ---------- Komponen kecil ---------- */
 
-function SectionHeader({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
+function ChangeText({
+  value,
+  goodWhenUp,
+  fallback,
+}: {
+  value: number | null;
+  goodWhenUp: boolean;
+  fallback: string;
+}) {
+  if (value === null) return <p className="text-xs font-medium text-[#5b6f99]">{fallback}</p>;
+  const up = value >= 0;
+  const good = goodWhenUp ? up : !up;
+  const Icon = up ? ArrowUpRight : ArrowDownRight;
   return (
-    <div className="flex items-center gap-3">
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]" aria-hidden="true">
-        {icon}
-      </span>
-      <div>
-        <h3 className="font-display text-base font-extrabold tracking-[-0.02em] text-[#172554]">{title}</h3>
-        <p className="text-xs font-medium text-[#5b6f99]">{subtitle}</p>
+    <p className={cn('flex items-center gap-1 text-xs font-bold', good ? 'text-[#16a34a]' : 'text-[#e11d48]')}>
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {`${up ? '+' : ''}${value.toFixed(0)}% dari periode sebelumnya`}
+    </p>
+  );
+}
+
+function KpiCard({
+  label,
+  display,
+  loading,
+  tone,
+  icon,
+  footer,
+  spark,
+  sparkKey,
+}: {
+  label: string;
+  display: string;
+  loading: boolean;
+  tone: Tone;
+  icon: ReactNode;
+  footer: ReactNode;
+  spark?: TrendRow[];
+  sparkKey?: ChangeKey;
+}) {
+  const t = TONE[tone];
+  const sparkData = spark && sparkKey ? spark.map((r) => ({ v: r[sparkKey] })) : [];
+  return (
+    <Card className={cn('flex flex-col overflow-hidden p-5', t.card)}>
+      <div className="flex items-center gap-3">
+        <span className={cn('grid h-10 w-10 place-items-center rounded-xl', t.icon)}>{icon}</span>
+        <p className="text-sm font-bold text-[#172554]">{label}</p>
       </div>
+      <div className="mt-3">
+        {loading ? (
+          <Skeleton className="h-8 w-40" />
+        ) : (
+          <p className="font-display text-2xl font-extrabold tracking-[-0.02em] text-[#172554]">{display}</p>
+        )}
+      </div>
+      <div className="mt-2">{loading ? <Skeleton className="h-4 w-48" /> : footer}</div>
+      {sparkData.length > 0 && !loading && (
+        <div className="mt-3 h-14" aria-hidden="true">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={sparkData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id={`spark-${tone}-${sparkKey}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={t.stroke} stopOpacity={0.25} />
+                  <stop offset="100%" stopColor={t.stroke} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="v" stroke={t.stroke} strokeWidth={2} fill={`url(#spark-${tone}-${sparkKey})`} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  subtitle,
+  right,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]" aria-hidden="true">
+          {icon}
+        </span>
+        <div>
+          <h3 className="font-display text-base font-extrabold tracking-[-0.02em] text-[#172554]">{title}</h3>
+          <p className="text-xs font-medium text-[#5b6f99]">{subtitle}</p>
+        </div>
+      </div>
+      {right}
     </div>
   );
 }
@@ -397,53 +602,98 @@ function CardSkeleton({ rows = 4 }: { rows?: number }) {
   );
 }
 
-function RatioCard({ ratio, loading }: { ratio: number | null; loading: boolean }) {
-  if (loading) {
-    return (
-      <Card className="rounded-2xl border-[#dbeafe] bg-white p-4 shadow-[0_6px_18px_rgba(30,64,175,0.06)]">
-        <Skeleton className="h-10 w-10 rounded-xl" />
-        <Skeleton className="mt-4 h-3 w-28" />
-        <Skeleton className="mt-2 h-8 w-24" />
-        <Skeleton className="mt-4 h-1.5 w-full rounded-full" />
-      </Card>
-    );
-  }
-  const status =
-    ratio === null
-      ? 'Belum ada pemasukan'
-      : ratio < 0
-        ? 'Defisit: pengeluaran melebihi pemasukan'
-        : ratio < SAVINGS_TARGET
-          ? `Di bawah target ${SAVINGS_TARGET}%`
-          : `Sesuai target ${SAVINGS_TARGET}%`;
-  const width = ratio === null ? 0 : Math.min(Math.max(ratio, 0), 100);
+/* ---------- Kartu-kartu ---------- */
+
+function TrendCard({ data, loading }: { data: AnalisaData | null; loading: boolean }) {
+  if (loading || !data) return <CardSkeleton rows={5} />;
+  const points = data.tren.map((t) => ({ bulan: t.bulan, Pemasukan: t.pemasukan, Pengeluaran: t.pengeluaran }));
   return (
-    <Card className="rounded-2xl border border-[#ddd6fe] bg-[#f3e8ff] p-4 shadow-[0_6px_18px_rgba(30,64,175,0.06)]">
-      <div className="grid h-10 w-10 place-items-center rounded-xl bg-[#ddd6fe]">
-        <PiggyBank className="h-5 w-5 text-[#6d28d9]" strokeWidth={2.4} aria-hidden="true" />
+    <Card className={CARD}>
+      <SectionHeader
+        icon={<Activity className="h-5 w-5" />}
+        title="Tren Keuangan"
+        subtitle="Pemasukan dan pengeluaran 6 bulan terakhir"
+        right={
+          <div className="hidden items-center gap-3 text-xs font-bold text-[#31548a] sm:flex">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#2563eb]" aria-hidden="true" />
+              Pemasukan
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#e11d48]" aria-hidden="true" />
+              Pengeluaran
+            </span>
+          </div>
+        }
+      />
+      <div className="mt-4 h-64" role="img" aria-label="Grafik tren pemasukan dan pengeluaran 6 bulan terakhir">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="3 3" />
+            <XAxis dataKey="bulan" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+            <YAxis tickFormatter={(v) => short(Number(v))} tickLine={false} axisLine={false} width={72} tick={{ fontSize: 11, fill: '#64748b' }} />
+            <Tooltip formatter={(v) => formatIDR(Number(v))} />
+            <Line type="monotone" dataKey="Pemasukan" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="Pengeluaran" stroke="#e11d48" strokeWidth={2.5} dot={{ r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
-      <p className="mt-3 text-[13px] font-bold text-[#172554]">Rasio Tabungan</p>
-      <p className="mt-1 font-display text-[25px] font-extrabold tracking-[-0.03em] tnum text-[#4c1d95]">
-        {ratio === null ? '–' : `${ratio.toFixed(0)}%`}
+      <p className="mt-2 text-xs font-medium text-[#5b6f99] sm:hidden">
+        Biru: pemasukan. Merah: pengeluaran.
       </p>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#ddd6fe]" aria-hidden="true">
-        <span className="block h-full rounded-full bg-[#7c3aed]" style={{ width: `${width}%` }} />
-      </div>
-      <p className="mt-2 text-[11px] font-bold text-[#4c1d95]">{status}</p>
     </Card>
   );
 }
 
-function InsightCard({ items, loading }: { items: string[]; loading: boolean }) {
-  if (loading) return <CardSkeleton rows={4} />;
+type InsightState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; insights: string[]; hemat: string[] }
+  | { status: 'error'; message: string };
+
+function InsightCard({
+  items,
+  data,
+  periodLabel,
+  loading,
+}: {
+  items: string[];
+  data: AnalisaData | null;
+  periodLabel: string;
+  loading: boolean;
+}) {
+  const [state, setState] = useState<InsightState>({ status: 'idle' });
+
+  // Hasil AI hanya berlaku untuk periode yang sedang tampil.
+  useEffect(() => {
+    setState({ status: 'idle' });
+  }, [periodLabel]);
+
+  if (loading || !data) return <CardSkeleton rows={4} />;
+
+  const run = async () => {
+    setState({ status: 'loading' });
+    const res = await fetchAiAnalysis({ periode: periodLabel, data });
+    if (res.error || !res.data) {
+      setState({ status: 'error', message: res.error ?? 'AI belum bisa membuat insight.' });
+      return;
+    }
+    setState({ status: 'ready', insights: res.data.insights, hemat: res.data.hemat });
+  };
+
+  const hasNoData = data.pengeluaran === 0 && data.pemasukan === 0;
+
   return (
-    <Card className={CARD}>
-      <SectionHeader icon={<Lightbulb className="h-5 w-5" />} title="Insight" subtitle="Dihitung otomatis dari datamu" />
-      {items.length ? (
+    <Card className={cn(CARD, 'flex h-full flex-col')}>
+      <SectionHeader icon={<Lightbulb className="h-5 w-5" />} title="Insight Keuangan" subtitle="Dibaca dari angka periode ini" />
+
+      {items.length > 0 ? (
         <ul className="mt-4 space-y-3">
           {items.map((text, i) => (
-            <li key={i} className="flex gap-2 text-sm font-medium leading-relaxed text-[#172554]">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb]" aria-hidden="true" />
+            <li key={i} className="flex gap-3 text-sm font-medium leading-relaxed text-[#172554]">
+              <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]" aria-hidden="true">
+                <Sparkles className="h-3.5 w-3.5" />
+              </span>
               <span>{text}</span>
             </li>
           ))}
@@ -451,35 +701,122 @@ function InsightCard({ items, loading }: { items: string[]; loading: boolean }) 
       ) : (
         <p className="mt-4 text-sm font-medium text-[#5b6f99]">Belum cukup data untuk membuat insight.</p>
       )}
+
+      <div className="mt-auto border-t border-[#e0f2fe] pt-4">
+        {state.status === 'idle' && (
+          <button
+            type="button"
+            onClick={run}
+            disabled={hasNoData}
+            className="inline-flex h-10 items-center gap-2 rounded-full bg-[#2563eb] px-4 text-xs font-extrabold text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
+            {hasNoData ? 'Belum ada data untuk AI' : 'Buat insight AI'}
+          </button>
+        )}
+
+        {state.status === 'loading' && (
+          <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm font-semibold text-[#31548a]">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> AI sedang membaca ringkasan...
+          </p>
+        )}
+
+        {state.status === 'error' && (
+          <div className="rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-2.5 text-sm">
+            <p className="font-semibold text-[#92400e]">{state.message}</p>
+            <p className="mt-1 text-xs text-[#92400e]">Ringkasan angka di atas tetap bisa dipakai.</p>
+            <button type="button" onClick={run} className="mt-2 text-xs font-extrabold text-[#1d4ed8] underline underline-offset-2">
+              Coba lagi
+            </button>
+          </div>
+        )}
+
+        {state.status === 'ready' && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-wider text-[#5b6f99]">Insight AI</p>
+              {state.insights.length > 0 ? (
+                <ul className="mt-2 space-y-2">
+                  {state.insights.map((text, i) => (
+                    <li key={i} className="flex gap-2 text-sm font-medium leading-relaxed text-[#172554]">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb]" aria-hidden="true" />
+                      <span>{text}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm font-medium text-[#5b6f99]">AI belum menemukan insight dari data ini.</p>
+              )}
+            </div>
+            {state.hemat.length > 0 && (
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-wider text-[#5b6f99]">Saran hemat</p>
+                <ul className="mt-2 space-y-2">
+                  {state.hemat.map((text, i) => (
+                    <li key={i} className="flex gap-2 text-sm font-medium leading-relaxed text-[#172554]">
+                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#16a34a]" aria-hidden="true" />
+                      <span>{text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <button type="button" onClick={run} className="text-xs font-extrabold text-[#1d4ed8] underline underline-offset-2">
+              Perbarui
+            </button>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
 
 function CategoryCard({ data, loading }: { data: AnalisaData | null; loading: boolean }) {
   if (loading || !data) return <CardSkeleton rows={5} />;
-  const rows = data.perKategori.slice(0, 8);
+
+  const segs = data.perKategori.slice(0, 4).map((k, i) => ({
+    name: k.kategori,
+    value: k.total,
+    persen: k.persen,
+    color: PALETTE[i % PALETTE.length],
+  }));
+  const rest = data.perKategori.slice(4);
+  const restTotal = rest.reduce((s, k) => s + k.total, 0);
+  const restPersen = rest.reduce((s, k) => s + k.persen, 0);
+  if (restTotal > 0) segs.push({ name: 'Lainnya', value: restTotal, persen: restPersen, color: '#94a3b8' });
+
   return (
     <Card className={CARD}>
-      <SectionHeader icon={<PieChartIcon className="h-5 w-5" />} title="Pengeluaran per Kategori" subtitle="Diurutkan dari yang terbesar" />
-      {rows.length ? (
-        <ul className="mt-4 space-y-3">
-          {rows.map((row, i) => (
-            <li key={row.kategori}>
-              <div className="flex items-baseline justify-between gap-3 text-xs">
-                <span className="min-w-0 truncate font-bold text-[#172554]">{row.kategori}</span>
-                <span className="shrink-0 font-bold tnum text-[#172554]">
-                  {formatIDR(row.total)} · {row.persen.toFixed(0)}%
-                </span>
+      <SectionHeader icon={<PieChartIcon className="h-5 w-5" />} title="Pengeluaran per Kategori" subtitle="Distribusi pengeluaran periode ini" />
+      {segs.length ? (
+        <div className="mt-4 flex items-center gap-4">
+          <div className="relative h-40 w-40 shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={segs} dataKey="value" nameKey="name" innerRadius={52} outerRadius={78} paddingAngle={2} stroke="none">
+                  {segs.map((s) => (
+                    <Cell key={s.name} fill={s.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
+              <div>
+                <p className="text-[11px] font-bold text-[#5b6f99]">Total</p>
+                <p className="text-xs font-extrabold text-[#172554]">{formatIDR(data.pengeluaran)}</p>
               </div>
-              <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#e0f2fe]" aria-hidden="true">
-                <span
-                  className="block h-full rounded-full"
-                  style={{ width: `${Math.min(row.persen, 100)}%`, background: PALETTE[i % PALETTE.length] }}
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
+            </div>
+          </div>
+          <ul className="min-w-0 flex-1 space-y-2">
+            {segs.map((s) => (
+              <li key={s.name} className="flex items-center gap-2 text-xs">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} aria-hidden="true" />
+                <span className="min-w-0 flex-1 truncate font-bold text-[#172554]">{s.name}</span>
+                <span className="font-extrabold text-[#172554]">{s.persen.toFixed(1)}%</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : (
         <p className="mt-4 text-sm font-medium text-[#5b6f99]">Tidak ada pengeluaran pada periode ini.</p>
       )}
@@ -489,23 +826,31 @@ function CategoryCard({ data, loading }: { data: AnalisaData | null; loading: bo
 
 function TopCard({ data, loading }: { data: AnalisaData | null; loading: boolean }) {
   if (loading || !data) return <CardSkeleton rows={5} />;
+  const rows = data.perKategori.slice(0, 5);
   return (
     <Card className={CARD}>
-      <SectionHeader icon={<Trophy className="h-5 w-5" />} title="Top 5 Pengeluaran" subtitle="Transaksi terbesar di periode ini" />
-      {data.topPengeluaran.length ? (
-        <ol className="mt-4 divide-y divide-[#e0f2fe]">
-          {data.topPengeluaran.map((item, i) => (
-            <li key={item.id || i} className="flex items-center gap-3 py-2.5">
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#dbeafe] text-xs font-extrabold text-[#2563eb]">
-                {i + 1}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-[#172554]">{item.deskripsi}</p>
-                <p className="truncate text-xs font-medium text-[#5b6f99]">
-                  {item.kategori} · {formatDay(item.tanggal)}
-                </p>
+      <SectionHeader icon={<Trophy className="h-5 w-5" />} title="Top 5 Pengeluaran" subtitle="Kategori dengan pengeluaran terbesar" />
+      {rows.length ? (
+        <ol className="mt-4 space-y-3">
+          {rows.map((row, i) => (
+            <li key={row.kategori}>
+              <div className="flex items-baseline justify-between gap-3 text-xs">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-[10px] font-extrabold text-[#2563eb]">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 truncate font-bold text-[#172554]">{row.kategori}</span>
+                </span>
+                <span className="shrink-0 font-extrabold text-[#172554]">
+                  {formatIDR(row.total)} <span className="text-[#5b6f99]">{row.persen.toFixed(1)}%</span>
+                </span>
               </div>
-              <span className="shrink-0 text-sm font-extrabold tnum text-[#be123c]">- {formatIDR(item.nominal)}</span>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#e0f2fe]" aria-hidden="true">
+                <span
+                  className="block h-full rounded-full"
+                  style={{ width: `${Math.min(row.persen, 100)}%`, background: PALETTE[i % PALETTE.length] }}
+                />
+              </div>
             </li>
           ))}
         </ol>
@@ -516,132 +861,86 @@ function TopCard({ data, loading }: { data: AnalisaData | null; loading: boolean
   );
 }
 
+function SummaryCard({
+  data,
+  loading,
+  chgIncome,
+  chgExpense,
+  chgNet,
+}: {
+  data: AnalisaData | null;
+  loading: boolean;
+  chgIncome: number | null;
+  chgExpense: number | null;
+  chgNet: number | null;
+}) {
+  if (loading || !data) return <CardSkeleton rows={5} />;
+  const target = Math.round((data.pemasukan * SAVINGS_TARGET) / 100);
+  const pct = target > 0 ? Math.min(Math.max(data.sisaBersih / target, 0), 1) * 100 : 0;
+  return (
+    <Card className={CARD}>
+      <SectionHeader icon={<ClipboardList className="h-5 w-5" />} title="Ringkasan Periode" subtitle="Angka utama periode ini" />
+      <dl className="mt-4 space-y-3">
+        <SummaryRow label="Pemasukan" value={formatIDR(data.pemasukan)} change={<ChangeText value={chgIncome} goodWhenUp fallback="" />} />
+        <SummaryRow label="Pengeluaran" value={formatIDR(data.pengeluaran)} change={<ChangeText value={chgExpense} goodWhenUp={false} fallback="" />} />
+        <SummaryRow label="Sisa Bersih" value={formatIDR(data.sisaBersih)} change={<ChangeText value={chgNet} goodWhenUp fallback="" />} />
+      </dl>
+      <div className="mt-5 rounded-xl bg-[#f5f8ff] p-4">
+        <div className="flex items-center gap-2 text-xs font-bold text-[#31548a]">
+          <Target className="h-4 w-4" aria-hidden="true" /> Target tabungan {SAVINGS_TARGET}% dari pemasukan
+        </div>
+        <div className="mt-1 flex items-baseline justify-between gap-3">
+          <span className="font-display text-base font-extrabold text-[#172554]">
+            {target > 0 ? formatIDR(target) : 'Belum ada pemasukan'}
+          </span>
+          <span className="text-sm font-extrabold text-[#2563eb]">{target > 0 ? `${pct.toFixed(0)}%` : '–'}</span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#dbeafe]" aria-hidden="true">
+          <span className="block h-full rounded-full bg-[#2563eb]" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SummaryRow({ label, value, change }: { label: string; value: string; change: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-[#eef2ff] pb-3 last:border-0 last:pb-0">
+      <div>
+        <dt className="text-sm font-bold text-[#172554]">{label}</dt>
+        <dd className="mt-0.5">{change}</dd>
+      </div>
+      <span className="font-display text-sm font-extrabold text-[#172554]">{value}</span>
+    </div>
+  );
+}
+
 function FlowCard({ data, loading }: { data: AnalisaData | null; loading: boolean }) {
   if (loading || !data) return <CardSkeleton rows={3} />;
-
-  const H = 220;
-  const TOP = 8;
-  const LX = 150; // kolom sumber pemasukan
-  const CX = 330; // simpul pusat
-  const RX = 510; // kolom pengeluaran dan sisa
-  const NW = 12;
-  const sisaPos = Math.max(data.sisaBersih, 0);
-  const outTotal = data.pengeluaran + sisaPos;
-  const scaleBase = Math.max(data.pemasukan, outTotal);
-
-  const sources = data.sumberPemasukan.filter((s) => s.total > 0).slice(0, 6);
-  const expense = data.perKategori.slice(0, 5).map((k, i) => ({
-    label: k.kategori,
-    value: k.total,
-    color: PALETTE[i % PALETTE.length],
-  }));
-  const restExp = data.perKategori.slice(5).reduce((sum, k) => sum + k.total, 0);
-  if (restExp > 0) expense.push({ label: 'Lainnya', value: restExp, color: '#94a3b8' });
-  if (sisaPos > 0) expense.push({ label: 'Sisa (tabungan)', value: sisaPos, color: '#16a34a' });
-
-  const scale = scaleBase > 0 ? H / scaleBase : 0;
-  const ribbon = (x0: number, x1: number, a0: number, a1: number, b0: number, b1: number) => {
-    const xm = (x0 + x1) / 2;
-    return `M${x0},${a0} C${xm},${a0} ${xm},${b0} ${x1},${b0} L${x1},${b1} C${xm},${b1} ${xm},${a1} ${x0},${a1} Z`;
-  };
-
-  // Sumber pemasukan -> pusat
-  let yl = TOP;
-  let cIn = TOP;
-  const inNodes = sources.map((s, i) => {
-    const h = s.total * scale;
-    const node = { ...s, y: yl, h, color: PALETTE[(i + 3) % PALETTE.length] };
-    const path = ribbon(LX + NW, CX, yl, yl + h, cIn, cIn + h);
-    cIn += h;
-    yl += h + 4;
-    return { node, path };
-  });
-
-  // Pusat -> pengeluaran dan sisa
-  let cOut = TOP;
-  let yr = TOP;
-  const outNodes = expense.map((e) => {
-    const h = e.value * scale;
-    const node = { ...e, y: yr, h };
-    const path = ribbon(CX + NW, RX, cOut, cOut + h, yr, yr + h);
-    cOut += h;
-    yr += h + 4;
-    return { node, path };
-  });
-
-  const centerH = scaleBase * scale;
-  const hasFlow = scaleBase > 0;
-  const svgH = TOP * 2 + H + 4;
+  const total = data.pemasukan + data.pengeluaran;
+  const incomeShare = total > 0 ? (data.pemasukan / total) * 100 : 0;
+  const expenseShare = total > 0 ? 100 - incomeShare : 0;
 
   return (
     <Card className={CARD}>
-      <SectionHeader
-        icon={<ArrowLeftRight className="h-5 w-5" />}
-        title="Aliran Dana"
-        subtitle="Dari sumber pemasukan ke pengeluaran dan sisa"
-      />
+      <SectionHeader icon={<Activity className="h-5 w-5" />} title="Aliran Dana" subtitle="Perbandingan pemasukan dan pengeluaran periode ini" />
 
-      {hasFlow ? (
+      {total > 0 ? (
         <>
-          <svg
-            viewBox={`0 0 680 ${svgH}`}
-            className="mt-4 hidden h-auto w-full sm:block"
-            role="img"
-            aria-label={`Aliran dana: pemasukan ${formatIDR(data.pemasukan)}, pengeluaran ${formatIDR(data.pengeluaran)}, sisa ${formatIDR(data.sisaBersih)}`}
-          >
-            {inNodes.map(({ node, path }) => (
-              <path key={`in-${node.kategori}`} d={path} fill={node.color} opacity={0.35}>
-                <title>{`${node.kategori}: ${formatIDR(node.total)}`}</title>
-              </path>
-            ))}
-            {outNodes.map(({ node, path }) => (
-              <path key={`out-${node.label}`} d={path} fill={node.color} opacity={0.35}>
-                <title>{`${node.label}: ${formatIDR(node.value)}`}</title>
-              </path>
-            ))}
-
-            {inNodes.map(({ node }) => (
-              <rect key={`inn-${node.kategori}`} x={LX} y={node.y} width={NW} height={Math.max(node.h, 2)} fill={node.color} rx={2} />
-            ))}
-            <rect x={CX} y={TOP} width={NW} height={Math.max(centerH, 2)} fill="#0b1f3a" rx={2} />
-            {outNodes.map(({ node }) => (
-              <rect key={`outn-${node.label}`} x={RX} y={node.y} width={NW} height={Math.max(node.h, 2)} fill={node.color} rx={2} />
-            ))}
-
-            {inNodes.map(({ node }) =>
-              node.h >= 14 ? (
-                <text key={`inl-${node.kategori}`} x={LX - 8} y={node.y + node.h / 2} textAnchor="end" dominantBaseline="middle" className="fill-[#172554] text-[11px] font-semibold">
-                  {truncate(node.kategori, 20)}
-                </text>
-              ) : null,
-            )}
-            <text x={CX + NW / 2} y={TOP + centerH + 16} textAnchor="middle" className="fill-[#172554] text-[11px] font-bold">
-              Total
-            </text>
-            {outNodes.map(({ node }) =>
-              node.h >= 14 ? (
-                <text key={`outl-${node.label}`} x={RX + NW + 8} y={node.y + node.h / 2} dominantBaseline="middle" className="fill-[#172554] text-[11px] font-semibold">
-                  {truncate(node.label, 20)}
-                </text>
-              ) : null,
-            )}
-          </svg>
-
-          <ul className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-            {expense.map((s) => (
-              <li key={s.label} className="flex items-center gap-2 text-xs">
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: s.color }} aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate font-semibold text-[#172554]">{s.label}</span>
-                <span className="font-bold text-[#172554]">{formatIDR(s.value)}</span>
-                <span className="w-10 text-right font-bold text-[#5b6f99]">{((s.value / Math.max(data.pemasukan, 1)) * 100).toFixed(0)}%</span>
-              </li>
-            ))}
-          </ul>
-          {data.pengeluaran > data.pemasukan && (
-            <p className="mt-3 text-xs font-bold text-[#be123c]">
-              Pengeluaran melebihi pemasukan di periode ini, jadi tidak ada sisa.
-            </p>
-          )}
+          <div className="mt-5 flex h-4 w-full overflow-hidden rounded-full bg-[#e0f2fe]" role="img" aria-label={`Pemasukan ${incomeShare.toFixed(0)}%, pengeluaran ${expenseShare.toFixed(0)}%`}>
+            <span className="block h-full bg-[#3b82f6]" style={{ width: `${incomeShare}%` }} />
+            <span className="block h-full bg-[#f43f5e]" style={{ width: `${expenseShare}%` }} />
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs font-bold">
+            <span className="flex items-center gap-2 text-[#172554]">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#3b82f6]" aria-hidden="true" />
+              Pemasukan {formatIDR(data.pemasukan)} ({incomeShare.toFixed(0)}%)
+            </span>
+            <span className="flex items-center gap-2 text-[#172554]">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#f43f5e]" aria-hidden="true" />
+              Pengeluaran {formatIDR(data.pengeluaran)} ({expenseShare.toFixed(0)}%)
+            </span>
+          </div>
         </>
       ) : (
         <p className="mt-4 text-sm font-medium text-[#5b6f99]">Belum ada pemasukan maupun pengeluaran.</p>
@@ -667,122 +966,38 @@ function FlowCard({ data, loading }: { data: AnalisaData | null; loading: boolea
           pemasukan atau pengeluaran.
         </p>
       )}
-
-      <span className="sr-only">
-        Ringkasan: pemasukan {formatIDR(data.pemasukan)}, pengeluaran {formatIDR(data.pengeluaran)}.
-      </span>
     </Card>
   );
 }
 
-function truncate(s: string, n: number): string {
-  return s.length > n ? `${s.slice(0, n - 1)}…` : s;
-}
+function StatusCard({ data, loading }: { data: AnalisaData | null; loading: boolean }) {
+  if (loading || !data) return <CardSkeleton rows={3} />;
 
-/* ---------- Insight AI ---------- */
+  let tone: 'ok' | 'warn' | 'bad' = 'ok';
+  let text = 'Kamu masih dalam kondisi keuangan yang sehat!';
+  if (data.pemasukan === 0 && data.pengeluaran > 0) {
+    tone = 'warn';
+    text = 'Belum ada pemasukan di periode ini, jadi kondisi keuanganmu belum bisa dinilai.';
+  } else if (data.pengeluaran > data.pemasukan) {
+    tone = 'bad';
+    text = 'Pengeluaran melebihi pemasukan. Mulai dari kategori terbesar untuk dikurangi.';
+  } else if (data.rasioTabungan !== null && data.rasioTabungan < SAVINGS_TARGET) {
+    tone = 'warn';
+    text = `Rasio tabungan masih di bawah target ${SAVINGS_TARGET}%. Masih bisa dikejar.`;
+  }
 
-type AiState =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'ready'; insights: string[]; hemat: string[] }
-  | { status: 'error'; message: string };
-
-function AiInsightCard({ data, periodLabel, loading }: { data: AnalisaData | null; periodLabel: string; loading: boolean }) {
-  const [state, setState] = useState<AiState>({ status: 'idle' });
-
-  // Hasil AI hanya berlaku untuk periode yang sedang tampil.
-  useEffect(() => {
-    setState({ status: 'idle' });
-  }, [periodLabel]);
-
-  if (loading || !data) return <CardSkeleton rows={4} />;
-
-  const run = async () => {
-    setState({ status: 'loading' });
-    const res = await fetchAiAnalysis({ periode: periodLabel, data });
-    if (res.error || !res.data) {
-      setState({ status: 'error', message: res.error ?? 'AI belum bisa membuat insight.' });
-      return;
-    }
-    setState({ status: 'ready', insights: res.data.insights, hemat: res.data.hemat });
-  };
-
-  const hasNoData = data.pengeluaran === 0 && data.pemasukan === 0;
+  const styles = {
+    ok: { box: 'border-[#bbf7d0] bg-[#f0fdf4]', icon: 'bg-[#16a34a] text-white', Icon: CheckCircle2 },
+    warn: { box: 'border-[#fde68a] bg-[#fffbeb]', icon: 'bg-[#f59e0b] text-white', Icon: AlertTriangle },
+    bad: { box: 'border-[#fecdd3] bg-[#fff1f2]', icon: 'bg-[#e11d48] text-white', Icon: AlertTriangle },
+  }[tone];
 
   return (
-    <Card className={CARD}>
-      <div className="flex items-start justify-between gap-3">
-        <SectionHeader icon={<Sparkles className="h-5 w-5" />} title="Insight AI" subtitle="Dibuat AI dari ringkasan angka periode ini" />
-        {state.status !== 'loading' && (
-          <button
-            type="button"
-            onClick={run}
-            disabled={hasNoData}
-            className="shrink-0 rounded-full bg-[#2563eb] px-3 py-1.5 text-xs font-extrabold text-white transition hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {state.status === 'ready' ? 'Perbarui' : 'Buat insight'}
-          </button>
-        )}
-      </div>
-
-      {state.status === 'idle' && (
-        <p className="mt-4 text-sm font-medium text-[#5b6f99]">
-          {hasNoData
-            ? 'Belum ada transaksi di periode ini, jadi AI belum punya data untuk dianalisa.'
-            : 'Tekan "Buat insight" untuk meminta AI membaca ringkasan periode ini. Hanya angka ringkasan yang dikirim, bukan deskripsi transaksi.'}
-        </p>
-      )}
-
-      {state.status === 'loading' && (
-        <div className="mt-4 space-y-2" role="status" aria-live="polite">
-          <p className="flex items-center gap-2 text-sm font-semibold text-[#31548a]">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> AI sedang membaca ringkasan...
-          </p>
-          <Skeleton className="h-4 w-11/12 bg-[#dbeafe]" />
-          <Skeleton className="h-4 w-8/12 bg-[#dbeafe]" />
-        </div>
-      )}
-
-      {state.status === 'error' && (
-        <div className="mt-4 rounded-xl border border-[#fde68a] bg-[#fffbeb] px-3 py-2.5 text-sm">
-          <p className="font-semibold text-[#92400e]">{state.message}</p>
-          <p className="mt-1 text-xs text-[#92400e]">Ringkasan angka di atas tetap bisa dipakai.</p>
-          <button type="button" onClick={run} className="mt-2 text-xs font-extrabold text-[#1d4ed8] underline underline-offset-2">
-            Coba lagi
-          </button>
-        </div>
-      )}
-
-      {state.status === 'ready' && (
-        <div className="mt-4 space-y-5">
-          {state.insights.length > 0 ? (
-            <ul className="space-y-3">
-              {state.insights.map((text, i) => (
-                <li key={i} className="flex gap-2 text-sm font-medium leading-relaxed text-[#172554]">
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb]" aria-hidden="true" />
-                  <span>{text}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm font-medium text-[#5b6f99]">AI belum menemukan insight dari data ini.</p>
-          )}
-
-          {state.hemat.length > 0 && (
-            <div className="border-t border-[#e0f2fe] pt-4">
-              <p className="text-xs font-extrabold uppercase tracking-wider text-[#5b6f99]">Saran hemat</p>
-              <ul className="mt-2 space-y-2">
-                {state.hemat.map((text, i) => (
-                  <li key={i} className="flex gap-2 text-sm font-medium leading-relaxed text-[#172554]">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[#16a34a]" aria-hidden="true" />
-                    <span>{text}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
+    <Card className={cn('flex h-full items-center gap-4 p-5', styles.box)}>
+      <span className={cn('grid h-11 w-11 shrink-0 place-items-center rounded-full', styles.icon)} aria-hidden="true">
+        <styles.Icon className="h-5 w-5" />
+      </span>
+      <p className="text-sm font-bold leading-relaxed text-[#172554]">{text}</p>
     </Card>
   );
 }
