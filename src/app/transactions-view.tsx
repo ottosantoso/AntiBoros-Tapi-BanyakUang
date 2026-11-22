@@ -11,8 +11,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { GRID_COLS_WITH_ACTIONS, TransactionList } from '@/components/transaction-list';
 import { cn } from '@/lib/utils';
 import { formatIDR } from '@/lib/format';
+import { PaginationBar, usePagination } from '@/components/pagination-bar';
 
 type TypeFilter = 'all' | TransactionType;
+
+/** Jumlah baris per halaman di tabel Riwayat Transaksi dan daftar Transfer. */
+const TX_PAGE_SIZE = 50;
+const TRANSFER_PAGE_SIZE = 20;
 
 /** Jeda sebelum penghapusan benar-benar dikirim ke database; selama itu bisa diurungkan. */
 const UNDO_MS = 8000;
@@ -108,6 +113,10 @@ export function TransactionsView({
       return true;
     });
   }, [typeFilter, fromDate, query, toDate, transactions, wallet]);
+
+  // Halaman kembali ke 1 setiap filter berubah.
+  const filterKey = [typeFilter, wallet, fromDate, toDate, query].join('|');
+  const tablePage = usePagination(filtered, TX_PAGE_SIZE, filterKey);
 
   const incomeTotal = transactions.filter((transaction) => transaction.tipe === 'Pemasukan').reduce((sum, transaction) => sum + transaction.nominal, 0);
   const expenseTotal = transactions.filter((transaction) => transaction.tipe === 'Pengeluaran').reduce((sum, transaction) => sum + transaction.nominal, 0);
@@ -237,7 +246,18 @@ export function TransactionsView({
               <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]"><ListFilter className="h-5 w-5" /></span><div><h2 className="font-display text-base font-extrabold tracking-[-0.02em] text-[#172554]">Riwayat Transaksi</h2><p className="text-xs font-medium text-[#5b6f99]">{loading ? 'Memuat transaksi...' : `${filtered.length} transaksi ditemukan`}</p></div></div>
               {!loading && filtered.length > 0 && <span className="hidden rounded-full bg-[#eff6ff] px-3 py-1.5 text-xs font-extrabold text-[#2563eb] sm:inline-flex">Terbaru</span>}
             </div>
-            {loading ? <TransactionList transactions={filtered} loading limit={5} /> : filtered.length ? <div className="overflow-x-auto"><div className="min-w-[760px]"><div className={cn('grid gap-3 border-b border-[#dbeafe] pb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#5b6f99]', GRID_COLS_WITH_ACTIONS)}><span>Tanggal</span><span>Keterangan</span><span>Kategori</span><span className="text-right">Nominal</span><span className="text-right">Aksi</span></div><TransactionList transactions={filtered} limit={10} onEdit={openEdit} onDelete={handleDelete} /></div></div> : <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => openCreate(defaultTab)} actionLabel={actions[0].label} />}
+            {loading ? <TransactionList transactions={filtered} loading limit={5} /> : filtered.length ? <div className="overflow-x-auto"><div className="min-w-[760px]"><div className={cn('grid gap-3 border-b border-[#dbeafe] pb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#5b6f99]', GRID_COLS_WITH_ACTIONS)}><span>Tanggal</span><span>Keterangan</span><span>Kategori</span><span className="text-right">Nominal</span><span className="text-right">Aksi</span></div><TransactionList transactions={tablePage.pageItems} onEdit={openEdit} onDelete={handleDelete} /></div></div> : <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => openCreate(defaultTab)} actionLabel={actions[0].label} />}
+            {!loading && filtered.length > 0 && (
+              <PaginationBar
+                page={tablePage.page}
+                totalPages={tablePage.totalPages}
+                total={tablePage.total}
+                from={tablePage.from}
+                to={tablePage.to}
+                setPage={tablePage.setPage}
+                noun="transaksi"
+              />
+            )}
           </Card>
         </>
       )}
@@ -266,6 +286,7 @@ export function TransactionsView({
 }
 
 function TransferList({ transfers, loading, onAdd }: { transfers: WalletTransfer[]; loading: boolean; onAdd: () => void }) {
+  const transferPage = usePagination(transfers, TRANSFER_PAGE_SIZE, '');
   if (loading) {
     return (
       <Card className="rounded-2xl border-[#dbeafe] bg-white p-5">
@@ -292,7 +313,7 @@ function TransferList({ transfers, loading, onAdd }: { transfers: WalletTransfer
         </div>
       ) : (
         <ul className="divide-y divide-[#e7eef9]">
-          {transfers.map((item) => (
+          {transferPage.pageItems.map((item) => (
             <li key={item.id} className="flex items-center gap-3 py-3">
               <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600"><WalletCards className="h-4 w-4" /></span>
               <div className="min-w-0 flex-1">
@@ -305,6 +326,17 @@ function TransferList({ transfers, loading, onAdd }: { transfers: WalletTransfer
             </li>
           ))}
         </ul>
+      )}
+      {transfers.length > 0 && (
+        <PaginationBar
+          page={transferPage.page}
+          totalPages={transferPage.totalPages}
+          total={transferPage.total}
+          from={transferPage.from}
+          to={transferPage.to}
+          setPage={transferPage.setPage}
+          noun="transfer"
+        />
       )}
     </Card>
   );

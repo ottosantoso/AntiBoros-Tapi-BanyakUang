@@ -15,6 +15,9 @@ import {
 } from '@/lib/data';
 import type { TransactionType, Wallet } from '@/lib/types';
 import { formatIDR } from '@/lib/format';
+import { PaginationBar, usePagination } from '@/components/pagination-bar';
+
+const BERULANG_PAGE_SIZE = 10;
 
 interface FormState {
   nama: string;
@@ -61,6 +64,7 @@ export function BerulangSettings() {
     void load();
   }, [load]);
 
+  const berulangPage = usePagination(items, BERULANG_PAGE_SIZE, '');
   const subPilihan = useMemo(() => subs.filter((s) => s.jenis === form.tipe), [subs, form.tipe]);
   const namaDompet = useMemo(() => new Map(wallets.map((w) => [w.id, w.nama])), [wallets]);
   const namaSub = useMemo(() => new Map(subs.map((s) => [s.id, s.nama])), [subs]);
@@ -122,7 +126,7 @@ export function BerulangSettings() {
 
       <ul className="mt-4 divide-y divide-border">
         {items.length === 0 && <li className="py-2 text-sm text-muted-foreground">Belum ada transaksi berulang.</li>}
-        {items.map((item) => (
+        {berulangPage.pageItems.map((item) => (
           <li key={item.id} className={`flex flex-wrap items-center gap-2 py-2 text-sm ${item.aktif ? '' : 'opacity-60'}`}>
             <div className="min-w-[10rem] flex-1">
               <p className="font-medium">{item.nama}</p>
@@ -141,6 +145,16 @@ export function BerulangSettings() {
           </li>
         ))}
       </ul>
+
+      <PaginationBar
+        page={berulangPage.page}
+        totalPages={berulangPage.totalPages}
+        total={berulangPage.total}
+        from={berulangPage.from}
+        to={berulangPage.to}
+        setPage={berulangPage.setPage}
+        noun="transaksi berulang"
+      />
 
       <form
         className="mt-5 grid gap-2 border-t border-border pt-4 sm:grid-cols-2"

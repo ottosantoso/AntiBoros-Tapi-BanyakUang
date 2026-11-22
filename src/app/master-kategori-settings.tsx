@@ -3,6 +3,7 @@ import { Eye, EyeOff, Pencil, Plus, Trash2, Check, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PaginationBar, usePagination } from '@/components/pagination-bar';
 import {
   type Budgeting,
   type JenisMaster,
@@ -20,6 +21,7 @@ import {
 
 const BUDGETING_OPTIONS: Budgeting[] = ['Kebutuhan', 'Keinginan', 'Tabungan'];
 const JENIS_OPTIONS: JenisMaster[] = ['Pengeluaran', 'Pemasukan'];
+const SUB_PAGE_SIZE = 20;
 
 /** CRUD kategori dan subkategori master. Item sistem terkunci (tidak bisa diubah, dinonaktifkan, atau dihapus). */
 export function MasterKategoriSettings() {
@@ -55,6 +57,7 @@ export function MasterKategoriSettings() {
     () => subs.filter((s) => s.jenis === jenis && (showInactive || s.aktif)),
     [subs, jenis, showInactive],
   );
+  const subPage = usePagination(subJenis, SUB_PAGE_SIZE, `${jenis}|${showInactive}`);
   const pilihKategoriSub = newSubKategori || kategoriAktif[0]?.nama || '';
 
   async function run(action: () => Promise<WriteResult>, onOk?: () => void) {
@@ -132,15 +135,16 @@ export function MasterKategoriSettings() {
     void run(() => deleteSubkategoriRow(s.id));
   }
 
+  // Grup kategori dibentuk dari baris di halaman aktif saja.
   const subGroups = useMemo(() => {
     const map = new Map<string, Subkategori[]>();
-    for (const s of subJenis) {
+    for (const s of subPage.pageItems) {
       const list = map.get(s.kategori) ?? [];
       list.push(s);
       map.set(s.kategori, list);
     }
     return Array.from(map.entries());
-  }, [subJenis]);
+  }, [subPage.pageItems]);
 
   return (
     <div className="space-y-5">
@@ -317,6 +321,16 @@ export function MasterKategoriSettings() {
             </div>
           ))}
         </div>
+
+        <PaginationBar
+          page={subPage.page}
+          totalPages={subPage.totalPages}
+          total={subPage.total}
+          from={subPage.from}
+          to={subPage.to}
+          setPage={subPage.setPage}
+          noun="subkategori"
+        />
 
         <form
           className="mt-5 grid gap-2 border-t border-border pt-4 sm:grid-cols-[1fr_1fr_auto_auto]"
