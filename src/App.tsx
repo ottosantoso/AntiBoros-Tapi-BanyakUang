@@ -137,7 +137,15 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                 </div>
               )}
 
-              {view === 'dashboard' && <DashboardView data={data} loading={loading} dateRange={dateRange} />}
+              {view === 'dashboard' && (
+                <DashboardView
+                  data={data}
+                  loading={loading}
+                  dateRange={dateRange}
+                  userName={userName}
+                  onNavigate={handleNavigate}
+                />
+              )}
               {view === 'wallets' && (
                 <WalletsView
                   data={data}
