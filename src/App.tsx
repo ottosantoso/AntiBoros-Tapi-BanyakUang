@@ -10,6 +10,7 @@ import type { View, TransactionSection } from '@/app/views';
 import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
 import { BudgetView } from '@/app/budget-view';
+import { AnalisaView } from '@/app/analisa-view';
 import { TransactionsView } from '@/app/transactions-view';
 import { ScannerView } from '@/app/scanner-view';
 import { SettingsView } from '@/app/settings-view';
@@ -160,6 +161,9 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                 />
               )}
               {view === 'budget' && <BudgetView />}
+              {view === 'analisa' && (
+                <AnalisaView onGoTransactions={() => handleNavigate('transactions')} syncKey={data} />
+              )}
               {view === 'scanner' && <ScannerView wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'settings' && <SettingsView onSaved={handleRefresh} />}
             </div>

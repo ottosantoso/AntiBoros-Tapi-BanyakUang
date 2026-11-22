@@ -65,6 +65,7 @@ src/
 Polling ulang tiap 30 detik. Setelah tulis data, view memanggil `onSaved/onSubmitted/onChanged` -> `refresh()`.
 
 ## Database (Supabase)
+- Edge Function `supabase/functions/ai-analysis/index.ts`: insight AI dan saran hemat dari ringkasan angka periode (Gemini, JSON, fallback model, `GEMINI_MODELS` opsional). Dipanggil dari `fetchAiAnalysis` di `data.ts` oleh kartu Insight AI di `analisa-view.tsx`. Belum di-deploy.
 - `wallets(id, nama UNIQUE, provider, saldo, created_at)`: seed 6 dompet bawaan
 - `transactions(id, tanggal, deskripsi, tipe 'Pemasukan'|'Pengeluaran', nominal, kategori, wallet_id FK, berulang, transfer_id FK, created_at)`
 - `wallet_transfers(id, tanggal, from_wallet_id, to_wallet_id, nominal>0, biaya_admin>=0, catatan, created_at)`
