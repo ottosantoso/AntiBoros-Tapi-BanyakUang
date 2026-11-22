@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowLeftRight,
@@ -11,6 +11,7 @@ import {
   Repeat,
   Search,
   Send,
+  Sparkles,
   Tags,
   Trash2,
   WalletCards,
@@ -25,9 +26,13 @@ import { cn } from '@/lib/utils';
 import { toISODate, formatIDR } from '@/lib/format';
 import type { Transaction, TransactionType, Wallet } from '@/lib/types';
 import { fetchSubkategori, type Subkategori } from '@/lib/data';
+import { categorizeDescription, labelSumber, type SaranKategori } from '@/lib/categorize';
 
 /** Subkategori sistem tidak dipilih manual: dicatat otomatis oleh aplikasi/trigger. */
 const SYSTEM_SUBKATEGORI = new Set(['Penyesuaian Saldo', 'Biaya Admin']);
+
+/** Jeda setelah user berhenti mengetik sebelum saran AI diminta. */
+const SARAN_DEBOUNCE_MS = 700;
 
 export type SheetTab = TransactionType | 'Transfer';
 
@@ -82,6 +87,13 @@ export interface TxActions {
   }) => Promise<{ success: boolean; error: string | null }>;
 }
 
+interface SaranState {
+  desc: string;
+  tab: string;
+  hasil: SaranKategori | null;
+  loading: boolean;
+}
+
 export function AddTransactionSheet({
   open,
   onOpenChange,
@@ -106,6 +118,9 @@ export function AddTransactionSheet({
   /** Kosong = otomatis dari deskripsi. Terisi = pilihan manual user. */
   const [subkategoriId, setSubkategoriId] = useState('');
   const [subQuery, setSubQuery] = useState('');
+  const [saran, setSaran] = useState<SaranState | null>(null);
+  /** Cache per jenis + deskripsi, supaya deskripsi yang sama tidak meminta AI dua kali. */
+  const saranCache = useRef(new Map<string, SaranKategori | null>());
 
   // Transfer state
   const [fromWallet, setFromWallet] = useState('');
@@ -138,6 +153,7 @@ export function AddTransactionSheet({
       setToWallet(wallets[1]?.id ?? '');
       setBiayaAdmin('');
       setCatatan('');
+      setSaran(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, initialTab]);
@@ -175,13 +191,50 @@ export function AddTransactionSheet({
     [subkategoriList, tab],
   );
 
-  // Subkategori opsional: kalau user tidak memilih manual, dipakai saran dari deskripsi.
-  const autoSub = useMemo(
+  // Saran AI bertingkat (riwayat, kata kunci, lalu Gemini). Diminta setelah user berhenti mengetik,
+  // dan hanya kalau user belum memilih subkategori manual.
+  const descKey = deskripsi.trim().toLowerCase();
+  useEffect(() => {
+    if (!open || editing || isTransfer || subkategoriId) return;
+    if (descKey.length < 3) {
+      setSaran(null);
+      return;
+    }
+    const key = `${tab}|${descKey}`;
+    if (saranCache.current.has(key)) {
+      setSaran({ desc: descKey, tab, hasil: saranCache.current.get(key) ?? null, loading: false });
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSaran({ desc: descKey, tab, hasil: null, loading: true });
+      const { saran: hasil, error } = await categorizeDescription(deskripsi.trim(), tab as TransactionType);
+      if (error) toast.error('Saran kategori gagal', { description: error });
+      saranCache.current.set(key, hasil);
+      if (active) setSaran({ desc: descKey, tab, hasil, loading: false });
+    }, SARAN_DEBOUNCE_MS);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, isTransfer, subkategoriId, descKey, tab]);
+
+  // Saran dari server hanya dipakai kalau masih untuk deskripsi dan jenis yang sedang diketik.
+  const saranAktif = saran && saran.desc === descKey && saran.tab === tab ? saran : null;
+  const saranSub = saranAktif && !saranAktif.loading && saranAktif.hasil
+    ? subOptions.find((s) => s.id === saranAktif.hasil?.subkategoriId)
+    : undefined;
+  const sumberSaran = saranSub && saranAktif?.hasil ? saranAktif.hasil.sumber : undefined;
+
+  // Saran lokal (nama subkategori muncul di deskripsi) dipakai sebagai pratinjau sambil menunggu server.
+  const autoLokal = useMemo(
     () => (isTransfer ? undefined : suggestSubkategori(subOptions, deskripsi, tab as TransactionType)),
     [subOptions, deskripsi, tab, isTransfer],
   );
+
   const manualSub = subOptions.find((s) => s.id === subkategoriId);
-  const selectedSub = manualSub ?? autoSub;
+  const selectedSub = manualSub ?? saranSub ?? autoLokal;
   const effectiveSubId = selectedSub?.id ?? '';
 
   const category = isTransfer ? 'Transfer' : (selectedSub?.kategori ?? guessCategory(deskripsi, tab as TransactionType));
@@ -196,6 +249,8 @@ export function AddTransactionSheet({
   const subFiltered = subKeyword
     ? subOptions.filter((s) => s.nama.toLowerCase().includes(subKeyword) || s.kategori.toLowerCase().includes(subKeyword))
     : subOptions;
+
+  const sedangMenganalisis = Boolean(saranAktif?.loading) && !manualSub;
 
   // Peringatan duplikat: transaksi dengan tanggal, deskripsi, nominal, dan dompet yang sama.
   const possibleDuplicate = useMemo(() => {
@@ -377,15 +432,18 @@ export function AddTransactionSheet({
                     ) : null}
                   </div>
 
-                  <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs font-bold text-primary">
-                    <Tags className="h-3.5 w-3.5 shrink-0" />
-                    <span className="min-w-0 truncate">
-                      {manualSub
-                        ? <>Dipilih manual: <span>{manualSub.nama}</span></>
-                        : autoSub
-                          ? <>Otomatis dari deskripsi: <span>{autoSub.nama}</span></>
-                          : 'Tulis deskripsi atau pilih subkategori di bawah'}
-                    </span>
+                  <div className="flex items-center gap-2 rounded-xl bg-primary/10 px-3 py-2 text-xs font-bold text-primary" aria-live="polite">
+                    {sedangMenganalisis ? (
+                      <><Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" /><span>Menganalisis deskripsi...</span></>
+                    ) : manualSub ? (
+                      <><Tags className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 truncate">Dipilih manual: {manualSub.nama}</span></>
+                    ) : saranSub && sumberSaran ? (
+                      <><Sparkles className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 truncate">Saran {labelSumber(sumberSaran)}: {saranSub.nama}</span></>
+                    ) : autoLokal ? (
+                      <><Tags className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 truncate">Cocok dengan nama: {autoLokal.nama}</span></>
+                    ) : (
+                      <><Tags className="h-3.5 w-3.5 shrink-0" /><span className="min-w-0 truncate">Tulis deskripsi atau pilih subkategori di bawah</span></>
+                    )}
                   </div>
 
                   <div className="rounded-xl border border-border bg-card p-2">
@@ -529,9 +587,8 @@ function WarningBox({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Saran subkategori dari deskripsi. Urutan: nama subkategori yang muncul di deskripsi (paling panjang
- * yang dicocokkan), lalu kata kunci kategori dari guessCategory, lalu kategori cadangan.
- * Tidak mengembalikan apa pun bila deskripsi kosong, agar user memilih sendiri.
+ * Saran lokal dari nama subkategori yang muncul di deskripsi. Dipakai sebagai pratinjau
+ * sambil menunggu saran server. Tidak mengembalikan apa pun bila deskripsi kosong.
  */
 export function suggestSubkategori(
   list: Subkategori[],
