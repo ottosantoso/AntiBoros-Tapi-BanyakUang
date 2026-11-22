@@ -90,7 +90,7 @@ export function WalletGrid({ wallets, loading }: { wallets: Wallet[]; loading?: 
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-16 text-center">
         <Wallet2 className="h-10 w-10 text-muted-foreground/50" />
         <p className="mt-3 text-sm font-medium text-muted-foreground">Belum ada dompet.</p>
-        <p className="text-xs text-muted-foreground/70">Hubungkan Google Apps Script untuk memuat saldo.</p>
+        <p className="text-xs text-muted-foreground/70">Tambahkan dompet untuk mulai mencatat saldo.</p>
       </div>
     );
   }

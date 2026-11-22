@@ -26,7 +26,7 @@ export interface DashboardData {
   dompet: Wallet[];
   topPengeluaran: TopExpense[];
   rekapKategori: Record<string, number>;
-  /** Optional fields the Apps Script may return. */
+  /** Optional fields, diisi bila tersedia. */
   transaksi?: Transaction[];
   trenBulanan?: MonthlyTrend[];
 }
