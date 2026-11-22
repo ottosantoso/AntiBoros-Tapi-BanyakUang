@@ -2,7 +2,7 @@ export type TransactionType = 'Pemasukan' | 'Pengeluaran';
 
 export type TransactionSection = 'all' | 'income' | 'expense' | 'transfer';
 
-export type WalletJenis = 'bank' | 'ewallet' | 'lainnya';
+export type WalletJenis = 'bank' | 'ewallet' | 'tunai' | 'lainnya';
 
 export interface Wallet {
   id: string;
@@ -165,4 +165,3 @@ export interface ScanMutasi {
 }
 
 export type ScanResult = ScanReceipt | ScanMutasi;
-

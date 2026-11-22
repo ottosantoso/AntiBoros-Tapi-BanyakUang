@@ -48,7 +48,7 @@ function walletFromRow(r: WalletRow): Wallet {
     nama: r.nama,
     provider: r.provider,
     saldo: toNumber(r.saldo),
-    jenis: (r.jenis === 'ewallet' || r.jenis === 'lainnya' ? r.jenis : 'bank') as Wallet['jenis'],
+    jenis: (r.jenis === 'ewallet' || r.jenis === 'lainnya' || r.jenis === 'tunai' ? r.jenis : 'bank') as Wallet['jenis'],
     logoUrl: r.logo_url ?? null,
   };
 }
