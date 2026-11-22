@@ -5,8 +5,20 @@ import { providerLogo } from '@/lib/wallet-providers';
 import { formatIDR } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
+/** Angka saldo yang disamarkan saat mode sembunyi aktif. */
+const MASKED = 'Rp •••••••';
+
 /** A single wallet rendered as a premium credit-card shape. */
-export function WalletCard({ wallet, index = 0 }: { wallet: Wallet; index?: number }) {
+export function WalletCard({
+  wallet,
+  index = 0,
+  sembunyi = false,
+}: {
+  wallet: Wallet;
+  index?: number;
+  /** Jika true, saldo disamarkan. Badge minus tetap tampil supaya kondisi dompet tetap terlihat. */
+  sembunyi?: boolean;
+}) {
   const meta = getWalletMeta(wallet);
   // Logo unggahan dulu; kalau tidak ada, pakai logo katalog untuk provider ini.
   const logo = meta.logoUrl ?? providerLogo(wallet.provider);
@@ -53,8 +65,14 @@ export function WalletCard({ wallet, index = 0 }: { wallet: Wallet; index?: numb
         <div>
           <p className="text-[11px] font-medium text-white/70">Saldo tersisa</p>
           <p className="font-display text-xl font-bold tnum leading-tight">
-            {meta.negative && '-'}
-            {formatIDR(Math.abs(wallet.saldo))}
+            {sembunyi ? (
+              MASKED
+            ) : (
+              <>
+                {meta.negative && '-'}
+                {formatIDR(Math.abs(wallet.saldo))}
+              </>
+            )}
           </p>
         </div>
 
@@ -74,7 +92,15 @@ export function WalletCardSkeleton() {
   );
 }
 
-export function WalletGrid({ wallets, loading }: { wallets: Wallet[]; loading?: boolean }) {
+export function WalletGrid({
+  wallets,
+  loading,
+  sembunyi = false,
+}: {
+  wallets: Wallet[];
+  loading?: boolean;
+  sembunyi?: boolean;
+}) {
   if (loading) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -107,7 +133,7 @@ export function WalletGrid({ wallets, loading }: { wallets: Wallet[]; loading?: 
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {wallets.map((w, i) => (
-          <WalletCard key={w.nama} wallet={w} index={i} />
+          <WalletCard key={w.nama} wallet={w} index={i} sembunyi={sembunyi} />
         ))}
       </div>
     </div>
