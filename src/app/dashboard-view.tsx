@@ -13,7 +13,6 @@ import {
   fetchBudgetData,
   fetchLatestAiReport,
   saveAiReport,
-  type AiReportRecord,
   type AnalisaData,
   type Goal,
 } from '@/lib/data';

@@ -1,138 +1,5 @@
-import type { DashboardData, NewTransaction, ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType } from './types';
+import type { ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType } from './types';
 import { supabase, supabaseConfigured } from './supabase-client';
-
-const LS_KEY = 'hepeng.appsScriptUrl';
-
-export function getApiUrl(): string {
-  if (typeof localStorage === 'undefined') return '';
-  return localStorage.getItem(LS_KEY) ?? '';
-}
-
-export function setApiUrl(url: string): void {
-  if (typeof localStorage === 'undefined') return;
-  const clean = url.trim();
-  if (clean) localStorage.setItem(LS_KEY, clean);
-  else localStorage.removeItem(LS_KEY);
-}
-
-export function hasApiUrl(): boolean {
-  return getApiUrl().length > 0;
-}
-
-function buildUrl(base: string, action: string, dateParams?: { start?: string; end?: string }): string {
-  const sep = base.includes('?') ? '&' : '?';
-  const params = new URLSearchParams({ action });
-  if (dateParams?.start) params.set('startDate', dateParams.start);
-  if (dateParams?.end) params.set('endDate', dateParams.end);
-  return `${base}${sep}${params.toString()}`;
-}
-
-function normaliseDashboard(raw: unknown): DashboardData {
-  const d = (raw ?? {}) as Partial<DashboardData>;
-  const dompet = Array.isArray(d.dompet)
-    ? d.dompet.map((w) => ({
-        id: String(w.id ?? ''),
-        nama: String(w.nama),
-        provider: String(w.provider ?? w.nama),
-        saldo: Number(w.saldo) || 0,
-        jenis: (w.jenis === 'ewallet' || w.jenis === 'lainnya' ? w.jenis : 'bank') as 'bank' | 'ewallet' | 'lainnya',
-        logoUrl: null,
-      }))
-    : [];
-  const topPengeluaran = Array.isArray(d.topPengeluaran)
-    ? d.topPengeluaran.map((t) => ({ deskripsi: String(t.deskripsi), nominal: Number(t.nominal) || 0 }))
-    : [];
-  const rekapKategori = (d.rekapKategori && typeof d.rekapKategori === 'object')
-    ? Object.fromEntries(
-        Object.entries(d.rekapKategori).map(([k, v]) => [String(k), Number(v) || 0]),
-      )
-    : {};
-  const transaksi = Array.isArray(d.transaksi)
-    ? d.transaksi.map((t) => ({
-        tanggal: String(t.tanggal),
-        deskripsi: String(t.deskripsi),
-        tipe: (String(t.tipe) === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
-        nominal: Number(t.nominal) || 0,
-        dompet: String(t.dompet),
-        kategori: t.kategori ? String(t.kategori) : undefined,
-      }))
-    : [];
-  const trenBulanan = Array.isArray(d.trenBulanan)
-    ? d.trenBulanan.map((m) => ({
-        bulan: String(m.bulan),
-        pemasukan: Number(m.pemasukan) || 0,
-        pengeluaran: Number(m.pengeluaran) || 0,
-      }))
-    : [];
-  const totalSaldo = Number(d.totalSaldo) || dompet.reduce((s, w) => s + (Number(w.saldo) || 0), 0);
-  const pemasukanBulanIni = Number(d.pemasukanBulanIni) || 0;
-  const pengeluaranBulanIni = Number(d.pengeluaranBulanIni) || 0;
-  const tabunganBulanIni =
-    Number(d.tabunganBulanIni) || (pemasukanBulanIni - pengeluaranBulanIni);
-  return {
-    totalSaldo,
-    pemasukanBulanIni,
-    pengeluaranBulanIni,
-    tabunganBulanIni,
-    dompet,
-    topPengeluaran,
-    rekapKategori,
-    transaksi,
-    trenBulanan,
-  };
-}
-
-export interface FetchResult {
-  data: DashboardData | null;
-  error: string | null;
-}
-
-/**
- * Fetch the dashboard payload from the Google Apps Script web app.
- * Apps Script text responses are JSON; some deployments wrap in their
- * own envelope, so we guard every access.
- */
-export async function fetchDashboard(dateParams?: { start?: string; end?: string }): Promise<FetchResult> {
-  const base = getApiUrl();
-  if (!base) return { data: null, error: null };
-
-  try {
-    const res = await fetch(buildUrl(base, 'getDashboard', dateParams), {
-      method: 'GET',
-      redirect: 'follow',
-      headers: { Accept: 'application/json' },
-    });
-    if (!res.ok) {
-      return { data: null, error: `Server merespons ${res.status} ${res.statusText}` };
-    }
-    const text = await res.text();
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      // Apps Script occasionally returns JSON wrapped in HTML during auth.
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch {
-          return { data: null, error: 'Respons server bukan JSON valid.' };
-        }
-      } else {
-        return { data: null, error: 'Respons server bukan JSON valid.' };
-      }
-    }
-    return { data: normaliseDashboard(parsed), error: null };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Gagal terhubung ke server.';
-    return { data: null, error: `Gagal mengambil data: ${msg}` };
-  }
-}
-
-export interface AddResult {
-  success: boolean;
-  error: string | null;
-}
 
 export interface ScanResponseResult {
   success: boolean;
@@ -140,10 +7,7 @@ export interface ScanResponseResult {
   error: string | null;
 }
 
-/**
- * POST an image for AI scanning. Same no-Content-Type rule as addTransaction
- * so Apps Script receives the body without a CORS preflight.
- */
+/** Kirim gambar ke Edge Function `scan-image` untuk dibaca AI. */
 export async function scanImage(payload: ScanPayload): Promise<ScanResponseResult> {
   if (!supabaseConfigured) {
     return { success: false, data: null, error: 'Koneksi Supabase belum diatur.' };
@@ -177,7 +41,7 @@ export async function scanImage(payload: ScanPayload): Promise<ScanResponseResul
 
 function toTransactionType(v: unknown): TransactionType {
   const s = String(v ?? '').toLowerCase();
-  if (s === 'pemasukan' || s === 'income' || s === 'kredit' || s === '+' ) return 'Pemasukan';
+  if (s === 'pemasukan' || s === 'income' || s === 'kredit' || s === '+') return 'Pemasukan';
   return 'Pengeluaran';
 }
 
@@ -239,4 +103,3 @@ function normaliseScanResult(raw: ScanResult, imageType: 'struk' | 'mutasi'): Sc
     transaksi,
   } satisfies ScanMutasi;
 }
-

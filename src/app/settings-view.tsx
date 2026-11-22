@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, Info, ShieldCheck, Sparkles } from 'lucide-react';
+import { Clock, Info, ShieldCheck, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 
 interface Props {
@@ -45,12 +45,6 @@ export function SettingsView(_props: Props) {
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-savings" />
             <span className="text-muted-foreground">
               Scanner struk dan mutasi diproses oleh layanan AI di server. Tidak ada yang perlu dikonfigurasi di sini.
-            </span>
-          </li>
-          <li className="flex gap-3">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-income" />
-            <span className="text-muted-foreground">
-              Pengaturan lama berbasis Google Apps Script sudah tidak digunakan, jadi tidak lagi ditampilkan.
             </span>
           </li>
         </ul>
