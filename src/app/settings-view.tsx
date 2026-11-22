@@ -13,6 +13,8 @@ const COMING_SOON = [
   'Backup dan ekspor data',
 ];
 
+// Prop onSaved tetap diterima karena App.tsx masih mengirimkannya.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function SettingsView(_props: Props) {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
