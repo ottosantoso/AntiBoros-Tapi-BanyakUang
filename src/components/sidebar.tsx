@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   List,
   PiggyBank,
+  BarChart3,
   ScanLine,
   Settings,
   TrendingDown,
@@ -40,6 +41,7 @@ const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[
   { id: 'dashboard', label: 'Dashboard', hint: 'Ringkasan keuangan', icon: LayoutDashboard },
   { id: 'wallets', label: 'Dompet', hint: 'Kelola sumber dana', icon: Wallet },
   { id: 'budget', label: 'Budget', hint: 'Batas & target tabungan', icon: PiggyBank },
+  { id: 'analisa', label: 'Analisa', hint: 'Tren & aliran dana', icon: BarChart3 },
 ];
 
 export function Sidebar({
