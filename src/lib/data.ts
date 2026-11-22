@@ -802,3 +802,44 @@ export async function fetchAnalisa(range: { start: string; end: string }): Promi
     return { data: null, error: message };
   }
 }
+
+export interface AiAnalysisResult {
+  data: { insights: string[]; hemat: string[] } | null;
+  error: string | null;
+}
+
+/** Minta insight AI untuk satu periode. Hanya ringkasan angka yang dikirim, bukan detail transaksi. */
+export async function fetchAiAnalysis(payload: {
+  periode: string;
+  data: AnalisaData;
+}): Promise<AiAnalysisResult> {
+  try {
+    const d = payload.data;
+    const { data, error } = await supabase.functions.invoke<{
+      status?: string;
+      data?: { insights?: string[]; hemat?: string[] };
+      message?: string;
+    }>('ai-analysis', {
+      body: {
+        periode: payload.periode,
+        pemasukan: d.pemasukan,
+        pengeluaran: d.pengeluaran,
+        sisaBersih: d.sisaBersih,
+        rasioTabungan: d.rasioTabungan,
+        perKategori: d.perKategori.slice(0, 12).map((k) => ({ kategori: k.kategori, total: k.total, persen: k.persen })),
+        tren: d.tren.map((t) => ({ bulan: t.bulan, pemasukan: t.pemasukan, pengeluaran: t.pengeluaran })),
+        sumberPemasukan: d.sumberPemasukan.map((s) => ({ kategori: s.kategori, total: s.total })),
+        transferJumlah: d.transfer.jumlah,
+        transferBiayaAdmin: d.transfer.biayaAdmin,
+      },
+    });
+    if (error) return { data: null, error: `Gagal menghubungi AI: ${error.message}` };
+    if (data?.status === 'success' && data.data) {
+      return { data: { insights: data.data.insights ?? [], hemat: data.data.hemat ?? [] }, error: null };
+    }
+    return { data: null, error: data?.message ?? 'AI belum bisa membuat insight. Coba lagi nanti.' };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Gagal terhubung ke server.';
+    return { data: null, error: `Gagal menghubungi AI: ${msg}` };
+  }
+}
