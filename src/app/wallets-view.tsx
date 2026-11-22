@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Archive, Pencil, Plus, RotateCcw } from 'lucide-react';
+import { Archive, Eye, EyeOff, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DashboardData, Wallet } from '@/lib/types';
 import { WalletGrid } from '@/components/wallet-card';
@@ -28,6 +28,9 @@ import { EditWalletSheet } from '@/components/edit-wallet-sheet';
 import { formatIDR, formatIDRCompact } from '@/lib/format';
 import { getWalletMeta } from '@/lib/wallets';
 
+/** Angka saldo yang disamarkan saat mode sembunyi aktif. */
+const MASKED = 'Rp •••••••';
+
 export function WalletsView({
   data,
   loading,
@@ -52,6 +55,11 @@ export function WalletsView({
   const [target, setTarget] = useState<Wallet | null>(null);
   const [editTarget, setEditTarget] = useState<Wallet | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Sembunyikan semua angka saldo di halaman ini (misalnya saat layar bisa dilihat orang lain). Tidak disimpan. */
+  const [sembunyi, setSembunyi] = useState(false);
+
+  const tampil = (nilai: number) => (sembunyi ? MASKED : formatIDR(nilai));
+  const tampilRingkas = (nilai: number) => (sembunyi ? MASKED : formatIDRCompact(nilai));
 
   const muatArsip = useCallback(async () => {
     const res = await fetchArchivedWallets();
@@ -99,11 +107,24 @@ export function WalletsView({
       {/* Summary strip */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card className="p-4">
-          <p className="text-xs font-medium text-muted-foreground">Total Dompet</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground">Total Dompet</p>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setSembunyi((v) => !v)}
+              aria-label={sembunyi ? 'Tampilkan saldo' : 'Sembunyikan saldo'}
+              aria-pressed={sembunyi}
+              title={sembunyi ? 'Tampilkan saldo' : 'Sembunyikan saldo'}
+            >
+              {sembunyi ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </Button>
+          </div>
           {loading ? (
             <Skeleton className="mt-2 h-7 w-28" />
           ) : (
-            <p className="mt-1 font-display text-xl font-bold tnum text-balance">{formatIDR(data.totalSaldo)}</p>
+            <p className="mt-1 font-display text-xl font-bold tnum text-balance">{tampil(data.totalSaldo)}</p>
           )}
         </Card>
         <Card className="p-4">
@@ -111,7 +132,7 @@ export function WalletsView({
           {loading ? (
             <Skeleton className="mt-2 h-7 w-28" />
           ) : (
-            <p className="mt-1 font-display text-xl font-bold tnum text-income">{formatIDRCompact(positiveTotal)}</p>
+            <p className="mt-1 font-display text-xl font-bold tnum text-income">{tampilRingkas(positiveTotal)}</p>
           )}
         </Card>
         <Card className="p-4">
@@ -120,7 +141,7 @@ export function WalletsView({
             <Skeleton className="mt-2 h-7 w-28" />
           ) : (
             <p className="mt-1 font-display text-xl font-bold tnum text-expense">
-              {negative.length ? formatIDRCompact(negativeTotal) : 'Rp 0'}
+              {negative.length ? tampilRingkas(negativeTotal) : sembunyi ? MASKED : 'Rp 0'}
             </p>
           )}
         </Card>
@@ -171,8 +192,12 @@ export function WalletsView({
                     <p
                       className={`text-sm font-bold tnum ${meta.negative ? 'text-expense' : 'text-foreground'}`}
                     >
-                      {meta.negative && '-'}
-                      {formatIDR(Math.abs(w.saldo))}
+                      {sembunyi ? MASKED : (
+                        <>
+                          {meta.negative && '-'}
+                          {formatIDR(Math.abs(w.saldo))}
+                        </>
+                      )}
                     </p>
                     {meta.negative && (
                       <p className="text-[11px] font-medium text-expense">Saldo minus</p>
@@ -227,7 +252,7 @@ export function WalletsView({
                     <p className="text-xs text-muted-foreground">Diarsipkan</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold tnum text-foreground">{formatIDR(w.saldo)}</p>
+                    <p className="text-sm font-bold tnum text-foreground">{tampil(w.saldo)}</p>
                     <p className="text-[11px] text-muted-foreground">Sisa saldo</p>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => pulihkan(w)}>
