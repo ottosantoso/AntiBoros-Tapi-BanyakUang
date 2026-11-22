@@ -1,5 +1,5 @@
 import { useEffect, useState, type ChangeEvent } from 'react';
-import { Check, Landmark, Loader2, Plus, Smartphone, Upload, type LucideIcon } from 'lucide-react';
+import { Check, Landmark, Loader2, Plus, Smartphone, Upload, Wallet, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +31,11 @@ import {
 } from '@/lib/wallet-providers';
 import { cn } from '@/lib/utils';
 
-type Jenis = 'bank' | 'ewallet';
+type Jenis = 'bank' | 'ewallet' | 'tunai';
+
+/** Kode provider untuk dompet tunai. Dipakai juga oleh kartu dan styling dompet Cash. */
+const TUNAI_PROVIDER = 'CASH';
+const NAMA_TUNAI_DEFAULT = 'Dompet Tunai';
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml';
@@ -107,12 +111,20 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     return () => URL.revokeObjectURL(url);
   }, [logoFile]);
 
-  const providers = jenis === 'bank' ? BANK_PROVIDERS : EWALLET_PROVIDERS;
+  const providers = jenis === 'ewallet' ? EWALLET_PROVIDERS : BANK_PROVIDERS;
   const isOther = selected === OTHER_PROVIDER_CODE;
+  /** Provider yang disimpan: untuk dompet tunai selalu CASH, tanpa pilihan provider. */
+  const providerFinal = jenis === 'tunai' ? TUNAI_PROVIDER : selected;
 
   function pilihJenis(next: Jenis) {
     setJenis(next);
     setKonflik(null);
+    if (next === 'tunai') {
+      setSelected(TUNAI_PROVIDER);
+      setLogoFile(null);
+      if (!namaDiedit) setNama(NAMA_TUNAI_DEFAULT);
+      return;
+    }
     // Pilihan dari jenis lain tidak boleh tersisa setelah jenis berganti.
     setSelected((cur) => {
       if (!cur || cur === OTHER_PROVIDER_CODE) return cur;
@@ -185,7 +197,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
     // Grid hanya menampilkan provider sesuai jenis aktif, jadi jenis state sudah benar.
     const res = await addWallet({
       nama: namaFinal,
-      provider: selected ?? '',
+      provider: providerFinal ?? '',
       saldo,
       jenis,
       logo_url: logo.url,
@@ -198,7 +210,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
   }
 
   async function simpan() {
-    if (!selected) {
+    if (!providerFinal) {
       toast.error('Pilih bank atau e-wallet dulu');
       return;
     }
@@ -244,7 +256,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
       const logo = await unggahLogoBila();
       if (!logo.ok) return;
       const res = await restoreWalletRow(konflik.arsip.id, {
-        provider: selected ?? '',
+        provider: providerFinal ?? '',
         jenis,
         logo_url: logo.url,
       });
@@ -291,7 +303,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
       <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b border-border px-6 py-5 text-left">
           <SheetTitle className="font-display text-lg">Tambah Dompet</SheetTitle>
-          <SheetDescription>Pilih bank atau e-wallet, lalu beri nama dompetmu.</SheetDescription>
+          <SheetDescription>Pilih bank, e-wallet, atau dompet tunai, lalu beri nama dompetmu.</SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
@@ -299,7 +311,7 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
             <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Jenis Dompet
             </Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <JenisCard
                 active={jenis === 'bank'}
                 icon={Landmark}
@@ -312,78 +324,92 @@ export function AddWalletSheet({ open, onOpenChange, addWallet, onSubmitted }: A
                 label="E-Wallet"
                 onClick={() => pilihJenis('ewallet')}
               />
+              <JenisCard
+                active={jenis === 'tunai'}
+                icon={Wallet}
+                label="Tunai"
+                onClick={() => pilihJenis('tunai')}
+              />
             </div>
           </section>
 
-          <section className="space-y-2.5">
-            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {jenis === 'bank' ? 'Pilih Bank' : 'Pilih E-Wallet'}
-            </Label>
-            <div className="grid grid-cols-3 gap-3">
-              {providers.map((p) => (
-                <ProviderTile
-                  key={p.code}
-                  provider={p}
-                  active={selected === p.code}
-                  onClick={() => pilihProvider(p)}
-                />
-              ))}
-            </div>
+          {jenis === 'tunai' ? (
+            <p className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+              Dompet tunai tidak memerlukan bank atau e-wallet. Cocok untuk uang yang kamu pegang langsung.
+            </p>
+          ) : (
+            <>
+              <section className="space-y-2.5">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {jenis === 'bank' ? 'Pilih Bank' : 'Pilih E-Wallet'}
+                </Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {providers.map((p) => (
+                    <ProviderTile
+                      key={p.code}
+                      provider={p}
+                      active={selected === p.code}
+                      onClick={() => pilihProvider(p)}
+                    />
+                  ))}
+                </div>
 
-            <div className="flex items-center gap-3 py-1">
-              <span className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">atau</span>
-              <span className="h-px flex-1 bg-border" />
-            </div>
+                <div className="flex items-center gap-3 py-1">
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted-foreground">atau</span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
 
-            <button
-              type="button"
-              onClick={pilihLainnya}
-              aria-pressed={isOther}
-              className={cn(
-                'flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-3 text-sm font-semibold transition-colors',
-                isOther
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                <button
+                  type="button"
+                  onClick={pilihLainnya}
+                  aria-pressed={isOther}
+                  className={cn(
+                    'flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-3 text-sm font-semibold transition-colors',
+                    isOther
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                  )}
+                >
+                  <Plus className="h-4 w-4" />
+                  Lainnya (tidak ada di daftar)
+                </button>
+              </section>
+
+              {isOther && (
+                <section className="space-y-2.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Logo Dompet <span className="font-normal normal-case">(opsional)</span>
+                  </Label>
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-20 w-44 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-white p-2">
+                      {logoPreview ? (
+                        <img src={logoPreview} alt="Preview logo dompet" className="h-full w-full object-contain" />
+                      ) : (
+                        <Upload className="h-5 w-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="inline-flex cursor-pointer items-center gap-2 self-start rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted">
+                        <Upload className="h-4 w-4" />
+                        {logoFile ? 'Ganti logo' : 'Unggah logo'}
+                        <input type="file" accept={LOGO_ACCEPT} className="sr-only" onChange={onLogoChange} />
+                      </label>
+                      {logoFile && (
+                        <button
+                          type="button"
+                          onClick={() => setLogoFile(null)}
+                          className="self-start text-xs text-muted-foreground hover:text-destructive"
+                        >
+                          Hapus logo
+                        </button>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">PNG, JPG, WEBP, atau SVG. Maks 2 MB.</p>
+                    </div>
+                  </div>
+                </section>
               )}
-            >
-              <Plus className="h-4 w-4" />
-              Lainnya (tidak ada di daftar)
-            </button>
-          </section>
-
-          {isOther && (
-            <section className="space-y-2.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Logo Dompet <span className="font-normal normal-case">(opsional)</span>
-              </Label>
-              <div className="flex items-center gap-3">
-                <div className="grid h-20 w-44 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-white p-2">
-                  {logoPreview ? (
-                    <img src={logoPreview} alt="Preview logo dompet" className="h-full w-full object-contain" />
-                  ) : (
-                    <Upload className="h-5 w-5 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="inline-flex cursor-pointer items-center gap-2 self-start rounded-lg border border-border px-3 py-2 text-sm font-medium hover:bg-muted">
-                    <Upload className="h-4 w-4" />
-                    {logoFile ? 'Ganti logo' : 'Unggah logo'}
-                    <input type="file" accept={LOGO_ACCEPT} className="sr-only" onChange={onLogoChange} />
-                  </label>
-                  {logoFile && (
-                    <button
-                      type="button"
-                      onClick={() => setLogoFile(null)}
-                      className="self-start text-xs text-muted-foreground hover:text-destructive"
-                    >
-                      Hapus logo
-                    </button>
-                  )}
-                  <p className="text-[11px] text-muted-foreground">PNG, JPG, WEBP, atau SVG. Maks 2 MB.</p>
-                </div>
-              </div>
-            </section>
+            </>
           )}
 
           <section className="space-y-2.5">
@@ -483,7 +509,7 @@ function JenisCard({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'relative flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-4 text-sm font-semibold transition-colors',
+        'relative flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 text-sm font-semibold transition-colors',
         active
           ? 'border-primary bg-primary/5 text-primary'
           : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground',

@@ -36,6 +36,9 @@ import { BANK_PROVIDERS, EWALLET_PROVIDERS, OTHER_PROVIDER_CODE, providerLogo } 
 
 type JenisPilihan = 'bank' | 'ewallet';
 
+/** Kode provider untuk dompet tunai, sama dengan yang dipakai di form Tambah Dompet. */
+const TUNAI_PROVIDER = 'CASH';
+
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
 const LOGO_ACCEPT = 'image/png,image/jpeg,image/webp,image/svg+xml';
 const KATALOG = [...BANK_PROVIDERS, ...EWALLET_PROVIDERS];
@@ -99,16 +102,19 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
   }, [logoFile]);
 
   const isOther = provider === OTHER_PROVIDER_CODE;
+  const isTunai = provider === TUNAI_PROVIDER;
   const katalogTerpilih = KATALOG.find((p) => p.code === provider);
-  // Provider lama yang tidak ada di katalog (mis. CASH, JENIUS) tetap bisa dipilih ulang.
-  const providerLama = !katalogTerpilih && !isOther;
+  // Provider lama yang tidak ada di katalog (mis. JENIUS) tetap bisa dipilih ulang.
+  const providerLama = !katalogTerpilih && !isOther && !isTunai;
 
   // Jenis mengikuti provider yang dipilih; untuk Lainnya, pengguna memilih sendiri.
   const jenisFinal: Wallet['jenis'] = katalogTerpilih
     ? katalogTerpilih.jenis
-    : isOther
-      ? jenisLainnya
-      : wallet.jenis;
+    : isTunai
+      ? 'tunai'
+      : isOther
+        ? jenisLainnya
+        : wallet.jenis;
 
   const logoSekarang = hapusLogo ? null : (wallet.logoUrl ?? providerLogo(provider));
   const previewTampil = logoPreview ?? logoSekarang;
@@ -225,7 +231,7 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
 
           <section className="space-y-2.5">
             <Label htmlFor="edit-provider" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Bank / E-Wallet
+              Bank / E-Wallet / Tunai
             </Label>
             <Select value={provider} onValueChange={setProvider} disabled={saving}>
               <SelectTrigger id="edit-provider">
@@ -247,6 +253,10 @@ export function EditWalletSheet({ wallet, onClose, editWallet, onSubmitted }: Ed
                       {p.nama}
                     </SelectItem>
                   ))}
+                </SelectGroup>
+                <SelectGroup>
+                  <SelectLabel>Tunai</SelectLabel>
+                  <SelectItem value={TUNAI_PROVIDER}>Tunai</SelectItem>
                 </SelectGroup>
                 <SelectGroup>
                   <SelectLabel>Lainnya</SelectLabel>
