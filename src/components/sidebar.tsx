@@ -6,8 +6,13 @@ import {
   List,
   PiggyBank,
   BarChart3,
+  ClipboardList,
+  History,
+  MessageSquare,
   ScanLine,
   Settings,
+  Sparkles,
+  Tags,
   TrendingDown,
   TrendingUp,
   LogOut,
@@ -15,7 +20,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
-import type { View, TransactionSection } from '@/app/views';
+import type { View, TransactionSection, AiSection } from '@/app/views';
+
 interface TxChild {
   id: TransactionSection;
   label: string;
@@ -37,6 +43,14 @@ const TX_CHILDREN: TxChild[] = [
   },
 ];
 
+/** Sub-menu AI Center. "AI Scanner" tetap punya view sendiri, sisanya lewat `aiSection`. */
+const AI_CHILDREN: { id: 'scanner' | Exclude<AiSection, 'hub'>; label: string; icon: typeof ScanLine; iconClass: string; tileClass: string }[] = [
+  { id: 'scanner', label: 'AI Scanner', icon: ClipboardList, iconClass: 'text-amber-300', tileClass: 'bg-amber-500/15' },
+  { id: 'kategorisasi', label: 'Kategorisasi Otomatis', icon: Tags, iconClass: 'text-emerald-300', tileClass: 'bg-emerald-500/15' },
+  { id: 'asisten', label: 'Asisten Keuangan AI', icon: MessageSquare, iconClass: 'text-violet-300', tileClass: 'bg-violet-500/15' },
+  { id: 'riwayat', label: 'Riwayat AI', icon: History, iconClass: 'text-sky-300', tileClass: 'bg-sky-500/15' },
+];
+
 const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[] = [
   { id: 'dashboard', label: 'Dashboard', hint: 'Ringkasan keuangan', icon: LayoutDashboard },
   { id: 'wallets', label: 'Dompet', hint: 'Kelola sumber dana', icon: Wallet },
@@ -47,7 +61,9 @@ const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[
 export function Sidebar({
   view,
   txSection,
+  aiSection,
   onNavigate,
+  onNavigateAi,
   connected,
   usingDemo,
   userEmail,
@@ -56,7 +72,9 @@ export function Sidebar({
 }: {
   view: View;
   txSection: TransactionSection;
+  aiSection: AiSection;
   onNavigate: (v: View, section?: TransactionSection) => void;
+  onNavigateAi: (section: AiSection | 'scanner') => void;
   connected: boolean;
   usingDemo: boolean;
   userEmail: string;
@@ -65,7 +83,9 @@ export function Sidebar({
   open: boolean;
 }) {
   const [txOpen, setTxOpen] = useState(true);
+  const [aiOpen, setAiOpen] = useState(true);
   const txActive = view === 'transactions';
+  const aiActive = view === 'ai' || view === 'scanner';
 
   return (
     <aside
@@ -155,13 +175,62 @@ export function Sidebar({
           )}
         </div>
 
-        <NavButton
-          active={view === 'scanner'}
-          onClick={() => onNavigate('scanner')}
-          icon={<ScanLine className="h-[18px] w-[18px]" strokeWidth={2.2} />}
-          label="AI Scanner"
-          hint="Pindai struk otomatis"
-        />
+        {/* AI Center — accordion parent */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setAiOpen((o) => !o)}
+            aria-expanded={aiOpen}
+            className={cn(
+              'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+              aiActive ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+            )}
+          >
+            <span
+              className={cn(
+                'grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors',
+                aiActive ? 'bg-primary text-primary-foreground shadow-[0_0_18px_rgba(59,130,246,0.45)]' : 'bg-white/5 text-muted-foreground group-hover:text-foreground',
+              )}
+            >
+              <Sparkles className="h-[18px] w-[18px]" strokeWidth={2.2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className={cn('block truncate text-sm font-bold', aiActive && 'text-primary')}>AI Center</span>
+              <span className="block truncate text-[11px] font-medium text-muted-foreground">Pindai &amp; analisa dengan AI</span>
+            </span>
+            <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform duration-200', aiOpen && 'rotate-180')} />
+          </button>
+
+          {aiOpen && (
+            <div className="relative mt-1 ml-[26px] space-y-0.5 border-l border-sidebar-border pl-3">
+              {AI_CHILDREN.map((child) => {
+                const childActive = child.id === 'scanner' ? view === 'scanner' : view === 'ai' && aiSection === child.id;
+                return (
+                  <button
+                    key={child.id}
+                    type="button"
+                    onClick={() => (child.id === 'scanner' ? onNavigate('scanner') : onNavigateAi(child.id))}
+                    className={cn(
+                      'relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold transition-colors',
+                      childActive
+                        ? 'bg-primary/15 text-primary'
+                        : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                    )}
+                  >
+                    {childActive && (
+                      <span className="absolute -left-[13px] top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-primary" />
+                    )}
+                    <span className={cn('grid h-6 w-6 shrink-0 place-items-center rounded-md', child.tileClass)}>
+                      <child.icon className={cn('h-3.5 w-3.5', child.iconClass)} strokeWidth={2.4} />
+                    </span>
+                    <span className="truncate">{child.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <NavButton
           active={view === 'settings'}
           onClick={() => onNavigate('settings')}
