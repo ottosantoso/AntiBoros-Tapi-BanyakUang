@@ -88,6 +88,8 @@ export interface DataResult {
  */
 export async function fetchDashboardData(range?: { start?: string; end?: string }): Promise<DataResult> {
   try {
+    // Catat transaksi berulang yang sudah jatuh tempo sebelum data dibaca. Idempoten.
+    await supabase.rpc('proses_transaksi_berulang');
     const [walletsRes, txRes] = await Promise.all([
       supabase.from('wallets').select('*').order('created_at', { ascending: true }),
       supabase
@@ -486,6 +488,9 @@ export interface Subkategori {
   kategori: string;
   jenis: TransactionType;
   budgeting: Budgeting | null;
+  /** Subkategori sistem (Transfer, Penyesuaian Saldo, Biaya Admin): tidak bisa diubah atau dinonaktifkan. */
+  isSystem: boolean;
+  aktif: boolean;
 }
 
 export interface BudgetLimit {
@@ -519,6 +524,22 @@ interface SubkategoriDbRow {
   kategori: string;
   jenis: string;
   budgeting: string | null;
+  is_system?: boolean | null;
+  aktif?: boolean | null;
+}
+
+const SUBKATEGORI_COLUMNS = 'id,nama,kategori,jenis,budgeting,is_system,aktif';
+
+function subkategoriFromRow(r: SubkategoriDbRow): Subkategori {
+  return {
+    id: r.id,
+    nama: r.nama,
+    kategori: r.kategori,
+    jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+    budgeting: (r.budgeting as Budgeting | null) ?? null,
+    isSystem: r.is_system === true,
+    aktif: r.aktif !== false,
+  };
 }
 
 interface BudgetDbRow {
@@ -544,7 +565,7 @@ interface TxAggDbRow {
 export async function fetchBudgetData(range: { start: string; end: string }): Promise<BudgetData> {
   try {
     const [subRes, budRes, goalRes, txRes] = await Promise.all([
-      supabase.from('subkategori').select('id,nama,kategori,jenis,budgeting').order('nama', { ascending: true }),
+      supabase.from('subkategori').select(SUBKATEGORI_COLUMNS).order('nama', { ascending: true }),
       supabase.from('budgets').select('id,subkategori_id,limit_amount'),
       supabase.from('goals').select('id,nama,target,terkumpul,deadline').order('created_at', { ascending: true }),
       supabase
@@ -558,22 +579,18 @@ export async function fetchBudgetData(range: { start: string; end: string }): Pr
     if (goalRes.error) throw goalRes.error;
     if (txRes.error) throw txRes.error;
 
-    const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[]).map((r) => ({
-      id: r.id,
-      nama: r.nama,
-      kategori: r.kategori,
-      jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
-      budgeting: (r.budgeting as Budgeting | null) ?? null,
-    }));
-    const kategoriById = new Map(subkategori.map((s) => [s.id, s.kategori]));
+    const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[])
+      .map(subkategoriFromRow)
+      .filter((s) => s.aktif);
+    const systemById = new Map(subkategori.map((s) => [s.id, s.isSystem]));
 
     let pemasukan = 0;
     const spentBySubkat: Record<string, number> = {};
     for (const r of (txRes.data ?? []) as TxAggDbRow[]) {
       const nominal = toNumber(r.nominal);
-      const kat = r.subkategori_id ? kategoriById.get(r.subkategori_id) : undefined;
+      const isSystem = r.subkategori_id ? systemById.get(r.subkategori_id) === true : false;
       if (r.tipe === 'Pemasukan') {
-        if (!(kat && NON_REAL_KATEGORI.has(kat))) pemasukan += nominal;
+        if (!isSystem) pemasukan += nominal;
       } else if (r.subkategori_id) {
         spentBySubkat[r.subkategori_id] = (spentBySubkat[r.subkategori_id] ?? 0) + nominal;
       }
@@ -647,20 +664,208 @@ export async function deleteGoalRow(id: string): Promise<WriteResult> {
   return { success: true, error: null };
 }
 
-/** Daftar subkategori milik pengguna, untuk dropdown transaksi dan pemetaan scanner. */
+/** Daftar subkategori AKTIF, untuk dropdown transaksi dan pemetaan scanner. */
 export async function fetchSubkategori(): Promise<Subkategori[]> {
   const { data, error } = await supabase
     .from('subkategori')
-    .select('id,nama,kategori,jenis,budgeting')
+    .select(SUBKATEGORI_COLUMNS)
+    .eq('aktif', true)
     .order('nama', { ascending: true });
   if (error || !data) return [];
-  return (data as SubkategoriDbRow[]).map((r) => ({
-    id: r.id,
-    nama: r.nama,
-    kategori: r.kategori,
-    jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
-    budgeting: (r.budgeting as Budgeting | null) ?? null,
-  }));
+  return (data as SubkategoriDbRow[]).map(subkategoriFromRow);
+}
+
+/* ---------- Master kategori & subkategori (CRUD di Pengaturan) ---------- */
+
+export type JenisMaster = 'Pengeluaran' | 'Pemasukan';
+
+export interface KategoriMaster {
+  id: string;
+  nama: string;
+  jenis: JenisMaster;
+  isSystem: boolean;
+  aktif: boolean;
+}
+
+interface KategoriDbRow {
+  id: string;
+  nama: string;
+  jenis: string;
+  is_system: boolean | null;
+  aktif: boolean | null;
+}
+
+/** Semua subkategori termasuk yang nonaktif, untuk halaman Pengaturan. */
+export async function fetchSubkategoriSemua(): Promise<{ data: Subkategori[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('subkategori')
+    .select(SUBKATEGORI_COLUMNS)
+    .order('nama', { ascending: true });
+  if (error) return { data: [], error: error.message };
+  return { data: ((data ?? []) as SubkategoriDbRow[]).map(subkategoriFromRow), error: null };
+}
+
+/** Semua kategori master (level 1) termasuk yang nonaktif. */
+export async function fetchKategoriMaster(): Promise<{ data: KategoriMaster[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('kategori')
+    .select('id,nama,jenis,is_system,aktif')
+    .order('urutan', { ascending: true });
+  if (error) return { data: [], error: error.message };
+  return {
+    data: ((data ?? []) as KategoriDbRow[]).map((r) => ({
+      id: r.id,
+      nama: r.nama,
+      jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as JenisMaster,
+      isSystem: r.is_system === true,
+      aktif: r.aktif !== false,
+    })),
+    error: null,
+  };
+}
+
+export async function insertKategori(input: { nama: string; jenis: JenisMaster }): Promise<WriteResult> {
+  const { error } = await supabase.from('kategori').insert({ nama: input.nama.trim(), jenis: input.jenis });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function updateKategoriRow(id: string, patch: { nama?: string; aktif?: boolean }): Promise<WriteResult> {
+  const body: Record<string, unknown> = {};
+  if (patch.nama !== undefined) body.nama = patch.nama.trim();
+  if (patch.aktif !== undefined) body.aktif = patch.aktif;
+  const { error } = await supabase.from('kategori').update(body).eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function deleteKategoriRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase.from('kategori').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export interface SubkategoriInput {
+  nama: string;
+  kategori: string;
+  jenis: TransactionType;
+  budgeting: Budgeting | null;
+}
+
+export async function insertSubkategori(input: SubkategoriInput): Promise<WriteResult> {
+  const { error } = await supabase.from('subkategori').insert({
+    nama: input.nama.trim(),
+    kategori: input.kategori,
+    jenis: input.jenis,
+    budgeting: input.jenis === 'Pemasukan' ? null : input.budgeting,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function updateSubkategoriRow(
+  id: string,
+  patch: Partial<Pick<SubkategoriInput, 'nama' | 'kategori' | 'budgeting'>> & { aktif?: boolean },
+): Promise<WriteResult> {
+  const body: Record<string, unknown> = {};
+  if (patch.nama !== undefined) body.nama = patch.nama.trim();
+  if (patch.kategori !== undefined) body.kategori = patch.kategori;
+  if (patch.budgeting !== undefined) body.budgeting = patch.budgeting;
+  if (patch.aktif !== undefined) body.aktif = patch.aktif;
+  const { error } = await supabase.from('subkategori').update(body).eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Hapus subkategori. Ditolak database jika subkategori sistem. Transaksi lama tetap, subkategorinya kosong. */
+export async function deleteSubkategoriRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase.from('subkategori').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/* ---------- Transaksi berulang ---------- */
+
+export interface BerulangItem {
+  id: string;
+  nama: string;
+  tipe: TransactionType;
+  nominal: number;
+  walletId: string;
+  subkategoriId: string | null;
+  hariJatuhTempo: number;
+  terakhirDicatat: string | null;
+  aktif: boolean;
+}
+
+export interface BerulangInput {
+  nama: string;
+  tipe: TransactionType;
+  nominal: number;
+  walletId: string;
+  subkategoriId: string | null;
+  hariJatuhTempo: number;
+  tanggalMulai: string;
+}
+
+interface BerulangDbRow {
+  id: string;
+  nama: string;
+  tipe: string;
+  nominal: number | string;
+  wallet_id: string;
+  subkategori_id: string | null;
+  hari_jatuh_tempo: number;
+  terakhir_dicatat: string | null;
+  aktif: boolean;
+}
+
+export async function fetchBerulang(): Promise<{ data: BerulangItem[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('transaksi_berulang')
+    .select('id,nama,tipe,nominal,wallet_id,subkategori_id,hari_jatuh_tempo,terakhir_dicatat,aktif')
+    .order('created_at', { ascending: true });
+  if (error) return { data: [], error: error.message };
+  return {
+    data: ((data ?? []) as BerulangDbRow[]).map((r) => ({
+      id: r.id,
+      nama: r.nama,
+      tipe: (r.tipe === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+      nominal: toNumber(r.nominal),
+      walletId: r.wallet_id,
+      subkategoriId: r.subkategori_id,
+      hariJatuhTempo: r.hari_jatuh_tempo,
+      terakhirDicatat: r.terakhir_dicatat,
+      aktif: r.aktif,
+    })),
+    error: null,
+  };
+}
+
+export async function insertBerulang(input: BerulangInput): Promise<WriteResult> {
+  const { error } = await supabase.from('transaksi_berulang').insert({
+    nama: input.nama.trim(),
+    tipe: input.tipe,
+    nominal: input.nominal,
+    wallet_id: input.walletId,
+    subkategori_id: input.subkategoriId,
+    hari_jatuh_tempo: input.hariJatuhTempo,
+    tanggal_mulai: input.tanggalMulai,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function updateBerulangAktif(id: string, aktif: boolean): Promise<WriteResult> {
+  const { error } = await supabase.from('transaksi_berulang').update({ aktif }).eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export async function deleteBerulangRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase.from('transaksi_berulang').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
 }
 
 /**
@@ -1088,7 +1293,7 @@ export async function fetchWalletInsights(): Promise<WalletInsightsResult> {
         const bulanIdx = new Date(now.getFullYear(), now.getMonth() + i, 1).getMonth();
         series.push({
           bulan: shortMonth(bulanIdx),
-          saldo: saldoSekarang - efekSetelah(tanggal) - (i === 0 ? 0 : 0),
+          saldo: saldoSekarang - efekSetelah(tanggal),
         });
       }
       // Titik bulan ini memakai saldo sekarang, supaya tepat sama dengan kartu.
