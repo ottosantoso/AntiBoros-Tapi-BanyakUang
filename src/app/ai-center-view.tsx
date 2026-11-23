@@ -1,53 +1,41 @@
-import { useState } from 'react';
-import { Check, ClipboardList, History, MessageSquare, Sparkles, Tags } from 'lucide-react';
+import { ClipboardList, History, MessageSquare, Sparkles, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { AiSection } from '@/app/views';
 import { cn } from '@/lib/utils';
 
-interface HubItem {
-  id: Exclude<AiSection, 'hub'>;
-  title: string;
-  desc: string;
-  icon: typeof Sparkles;
-  status: 'aktif' | 'segera';
-  statusLabel: string;
-  tone: string;
-}
+type SubSection = Exclude<AiSection, 'hub'>;
 
-const ITEMS: HubItem[] = [
+const SUB_ITEMS: { id: SubSection; title: string; desc: string; icon: typeof Sparkles; tone: string; aktif: boolean }[] = [
   {
     id: 'kategorisasi',
     title: 'Kategorisasi Otomatis',
     desc: 'AI mengenali deskripsi transaksi dan menyarankan kategori serta subkategori.',
     icon: Tags,
-    status: 'aktif',
-    statusLabel: 'Aktif',
     tone: 'bg-emerald-500/15 text-emerald-300',
+    aktif: true,
   },
   {
     id: 'asisten',
     title: 'Asisten Keuangan AI',
     desc: 'Chat dengan AI untuk bertanya tentang kondisi keuangan dan meminta saran.',
     icon: MessageSquare,
-    status: 'segera',
-    statusLabel: 'Segera hadir',
     tone: 'bg-violet-500/15 text-violet-300',
+    aktif: false,
   },
   {
     id: 'riwayat',
     title: 'Riwayat AI',
     desc: 'Melihat hasil insight AI yang pernah dibuat dan riwayat percakapan.',
     icon: History,
-    status: 'segera',
-    statusLabel: 'Segera hadir',
     tone: 'bg-sky-500/15 text-sky-300',
+    aktif: false,
   },
 ];
 
 /**
- * Hub AI Center. Sub-halaman dipilih lewat `section`; AI Scanner tidak di sini karena punya view sendiri
- * (lihat App.tsx), tetapi kartunya tetap ditampilkan agar hub terasa lengkap.
+ * Hub AI Center. Sub-halaman dipilih lewat `section`. AI Scanner punya view sendiri
+ * (lihat App.tsx), jadi kartunya di hub memanggil `onOpenScanner`.
  */
 export function AiCenterView({
   section,
@@ -61,17 +49,15 @@ export function AiCenterView({
   if (section === 'hub') {
     return (
       <div className="space-y-5">
-        <Card className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_20px_rgba(59,130,246,0.4)]">
-              <Sparkles className="h-5 w-5" />
-            </span>
-            <div>
-              <h2 className="font-display text-lg font-bold tracking-tight">AI Center</h2>
-              <p className="text-sm text-muted-foreground">
-                Fitur AI untuk membantu mencatat dan memahami keuanganmu. Semua hasil AI bisa kamu ubah sebelum disimpan.
-              </p>
-            </div>
+        <Card className="flex items-start gap-3 p-5">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_20px_rgba(59,130,246,0.4)]">
+            <Sparkles className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="font-display text-lg font-bold tracking-tight">AI Center</h2>
+            <p className="text-sm text-muted-foreground">
+              Fitur AI untuk membantu mencatat dan memahami keuanganmu. Semua hasil AI bisa kamu ubah sebelum disimpan.
+            </p>
           </div>
         </Card>
 
@@ -81,19 +67,17 @@ export function AiCenterView({
             desc="Pindai struk belanja, nota, dan bukti transaksi menjadi transaksi otomatis."
             icon={ClipboardList}
             tone="bg-amber-500/15 text-amber-300"
-            statusLabel="Aktif"
-            statusTone="bg-emerald-500/15 text-emerald-300"
+            aktif
             onClick={onOpenScanner}
           />
-          {ITEMS.map((item) => (
+          {SUB_ITEMS.map((item) => (
             <HubCard
               key={item.id}
               title={item.title}
               desc={item.desc}
               icon={item.icon}
               tone={item.tone}
-              statusLabel={item.statusLabel}
-              statusTone={item.status === 'aktif' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-muted-foreground'}
+              aktif={item.aktif}
               onClick={() => onOpen(item.id)}
             />
           ))}
@@ -132,7 +116,7 @@ export function AiCenterView({
     );
   }
 
-  // asisten dan riwayat: belum dibangun, tampilkan status yang jelas
+  // asisten dan riwayat belum dibangun: tampilkan status yang jelas, bukan halaman kosong
   const info =
     section === 'asisten'
       ? {
@@ -159,30 +143,35 @@ function HubCard({
   desc,
   icon: Icon,
   tone,
-  statusLabel,
-  statusTone,
+  aktif,
   onClick,
 }: {
   title: string;
   desc: string;
   icon: typeof Sparkles;
   tone: string;
-  statusLabel: string;
-  statusTone: string;
+  aktif: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
+      className="group rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
     >
       <Card className="flex h-full flex-col gap-3 p-5 transition-colors group-hover:border-primary/50">
         <div className="flex items-center justify-between">
           <span className={cn('grid h-10 w-10 place-items-center rounded-xl', tone)}>
             <Icon className="h-5 w-5" />
           </span>
-          <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-bold', statusTone)}>{statusLabel}</span>
+          <span
+            className={cn(
+              'rounded-full px-2.5 py-1 text-[11px] font-bold',
+              aktif ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-muted-foreground',
+            )}
+          >
+            {aktif ? 'Aktif' : 'Segera hadir'}
+          </span>
         </div>
         <div>
           <h3 className="font-display text-base font-bold tracking-tight">{title}</h3>
@@ -206,6 +195,3 @@ function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
     </li>
   );
 }
-
-// Ikon Check dan useState dipakai oleh komponen di luar file ini; dibiarkan agar impor konsisten.
-export const _unused = { Check, useState };
