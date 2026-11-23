@@ -88,8 +88,6 @@ export interface DataResult {
  */
 export async function fetchDashboardData(range?: { start?: string; end?: string }): Promise<DataResult> {
   try {
-    // Catat transaksi berulang yang sudah jatuh tempo sebelum data dibaca. Idempoten.
-    await supabase.rpc('proses_transaksi_berulang');
     const [walletsRes, txRes] = await Promise.all([
       supabase.from('wallets').select('*').order('created_at', { ascending: true }),
       supabase
@@ -488,9 +486,6 @@ export interface Subkategori {
   kategori: string;
   jenis: TransactionType;
   budgeting: Budgeting | null;
-  /** Subkategori sistem (Transfer, Penyesuaian Saldo, Biaya Admin): tidak bisa diubah atau dinonaktifkan. */
-  isSystem: boolean;
-  aktif: boolean;
 }
 
 export interface BudgetLimit {
@@ -524,22 +519,6 @@ interface SubkategoriDbRow {
   kategori: string;
   jenis: string;
   budgeting: string | null;
-  is_system?: boolean | null;
-  aktif?: boolean | null;
-}
-
-const SUBKATEGORI_COLUMNS = 'id,nama,kategori,jenis,budgeting,is_system,aktif';
-
-function subkategoriFromRow(r: SubkategoriDbRow): Subkategori {
-  return {
-    id: r.id,
-    nama: r.nama,
-    kategori: r.kategori,
-    jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
-    budgeting: (r.budgeting as Budgeting | null) ?? null,
-    isSystem: r.is_system === true,
-    aktif: r.aktif !== false,
-  };
 }
 
 interface BudgetDbRow {
@@ -565,7 +544,7 @@ interface TxAggDbRow {
 export async function fetchBudgetData(range: { start: string; end: string }): Promise<BudgetData> {
   try {
     const [subRes, budRes, goalRes, txRes] = await Promise.all([
-      supabase.from('subkategori').select(SUBKATEGORI_COLUMNS).order('nama', { ascending: true }),
+      supabase.from('subkategori').select('id,nama,kategori,jenis,budgeting').order('nama', { ascending: true }),
       supabase.from('budgets').select('id,subkategori_id,limit_amount'),
       supabase.from('goals').select('id,nama,target,terkumpul,deadline').order('created_at', { ascending: true }),
       supabase
@@ -579,18 +558,22 @@ export async function fetchBudgetData(range: { start: string; end: string }): Pr
     if (goalRes.error) throw goalRes.error;
     if (txRes.error) throw txRes.error;
 
-    const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[])
-      .map(subkategoriFromRow)
-      .filter((s) => s.aktif);
-    const systemById = new Map(subkategori.map((s) => [s.id, s.isSystem]));
+    const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[]).map((r) => ({
+      id: r.id,
+      nama: r.nama,
+      kategori: r.kategori,
+      jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+      budgeting: (r.budgeting as Budgeting | null) ?? null,
+    }));
+    const kategoriById = new Map(subkategori.map((s) => [s.id, s.kategori]));
 
     let pemasukan = 0;
     const spentBySubkat: Record<string, number> = {};
     for (const r of (txRes.data ?? []) as TxAggDbRow[]) {
       const nominal = toNumber(r.nominal);
-      const isSystem = r.subkategori_id ? systemById.get(r.subkategori_id) === true : false;
+      const kat = r.subkategori_id ? kategoriById.get(r.subkategori_id) : undefined;
       if (r.tipe === 'Pemasukan') {
-        if (!isSystem) pemasukan += nominal;
+        if (!(kat && NON_REAL_KATEGORI.has(kat))) pemasukan += nominal;
       } else if (r.subkategori_id) {
         spentBySubkat[r.subkategori_id] = (spentBySubkat[r.subkategori_id] ?? 0) + nominal;
       }
@@ -664,208 +647,20 @@ export async function deleteGoalRow(id: string): Promise<WriteResult> {
   return { success: true, error: null };
 }
 
-/** Daftar subkategori AKTIF, untuk dropdown transaksi dan pemetaan scanner. */
+/** Daftar subkategori milik pengguna, untuk dropdown transaksi dan pemetaan scanner. */
 export async function fetchSubkategori(): Promise<Subkategori[]> {
   const { data, error } = await supabase
     .from('subkategori')
-    .select(SUBKATEGORI_COLUMNS)
-    .eq('aktif', true)
+    .select('id,nama,kategori,jenis,budgeting')
     .order('nama', { ascending: true });
   if (error || !data) return [];
-  return (data as SubkategoriDbRow[]).map(subkategoriFromRow);
-}
-
-/* ---------- Master kategori & subkategori (CRUD di Pengaturan) ---------- */
-
-export type JenisMaster = 'Pengeluaran' | 'Pemasukan';
-
-export interface KategoriMaster {
-  id: string;
-  nama: string;
-  jenis: JenisMaster;
-  isSystem: boolean;
-  aktif: boolean;
-}
-
-interface KategoriDbRow {
-  id: string;
-  nama: string;
-  jenis: string;
-  is_system: boolean | null;
-  aktif: boolean | null;
-}
-
-/** Semua subkategori termasuk yang nonaktif, untuk halaman Pengaturan. */
-export async function fetchSubkategoriSemua(): Promise<{ data: Subkategori[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('subkategori')
-    .select(SUBKATEGORI_COLUMNS)
-    .order('nama', { ascending: true });
-  if (error) return { data: [], error: error.message };
-  return { data: ((data ?? []) as SubkategoriDbRow[]).map(subkategoriFromRow), error: null };
-}
-
-/** Semua kategori master (level 1) termasuk yang nonaktif. */
-export async function fetchKategoriMaster(): Promise<{ data: KategoriMaster[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('kategori')
-    .select('id,nama,jenis,is_system,aktif')
-    .order('urutan', { ascending: true });
-  if (error) return { data: [], error: error.message };
-  return {
-    data: ((data ?? []) as KategoriDbRow[]).map((r) => ({
-      id: r.id,
-      nama: r.nama,
-      jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as JenisMaster,
-      isSystem: r.is_system === true,
-      aktif: r.aktif !== false,
-    })),
-    error: null,
-  };
-}
-
-export async function insertKategori(input: { nama: string; jenis: JenisMaster }): Promise<WriteResult> {
-  const { error } = await supabase.from('kategori').insert({ nama: input.nama.trim(), jenis: input.jenis });
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-export async function updateKategoriRow(id: string, patch: { nama?: string; aktif?: boolean }): Promise<WriteResult> {
-  const body: Record<string, unknown> = {};
-  if (patch.nama !== undefined) body.nama = patch.nama.trim();
-  if (patch.aktif !== undefined) body.aktif = patch.aktif;
-  const { error } = await supabase.from('kategori').update(body).eq('id', id);
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-export async function deleteKategoriRow(id: string): Promise<WriteResult> {
-  const { error } = await supabase.from('kategori').delete().eq('id', id);
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-export interface SubkategoriInput {
-  nama: string;
-  kategori: string;
-  jenis: TransactionType;
-  budgeting: Budgeting | null;
-}
-
-export async function insertSubkategori(input: SubkategoriInput): Promise<WriteResult> {
-  const { error } = await supabase.from('subkategori').insert({
-    nama: input.nama.trim(),
-    kategori: input.kategori,
-    jenis: input.jenis,
-    budgeting: input.jenis === 'Pemasukan' ? null : input.budgeting,
-  });
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-export async function updateSubkategoriRow(
-  id: string,
-  patch: Partial<Pick<SubkategoriInput, 'nama' | 'kategori' | 'budgeting'>> & { aktif?: boolean },
-): Promise<WriteResult> {
-  const body: Record<string, unknown> = {};
-  if (patch.nama !== undefined) body.nama = patch.nama.trim();
-  if (patch.kategori !== undefined) body.kategori = patch.kategori;
-  if (patch.budgeting !== undefined) body.budgeting = patch.budgeting;
-  if (patch.aktif !== undefined) body.aktif = patch.aktif;
-  const { error } = await supabase.from('subkategori').update(body).eq('id', id);
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-/** Hapus subkategori. Ditolak database jika subkategori sistem. Transaksi lama tetap, subkategorinya kosong. */
-export async function deleteSubkategoriRow(id: string): Promise<WriteResult> {
-  const { error } = await supabase.from('subkategori').delete().eq('id', id);
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-/* ---------- Transaksi berulang ---------- */
-
-export interface BerulangItem {
-  id: string;
-  nama: string;
-  tipe: TransactionType;
-  nominal: number;
-  walletId: string;
-  subkategoriId: string | null;
-  hariJatuhTempo: number;
-  terakhirDicatat: string | null;
-  aktif: boolean;
-}
-
-export interface BerulangInput {
-  nama: string;
-  tipe: TransactionType;
-  nominal: number;
-  walletId: string;
-  subkategoriId: string | null;
-  hariJatuhTempo: number;
-  tanggalMulai: string;
-}
-
-interface BerulangDbRow {
-  id: string;
-  nama: string;
-  tipe: string;
-  nominal: number | string;
-  wallet_id: string;
-  subkategori_id: string | null;
-  hari_jatuh_tempo: number;
-  terakhir_dicatat: string | null;
-  aktif: boolean;
-}
-
-export async function fetchBerulang(): Promise<{ data: BerulangItem[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('transaksi_berulang')
-    .select('id,nama,tipe,nominal,wallet_id,subkategori_id,hari_jatuh_tempo,terakhir_dicatat,aktif')
-    .order('created_at', { ascending: true });
-  if (error) return { data: [], error: error.message };
-  return {
-    data: ((data ?? []) as BerulangDbRow[]).map((r) => ({
-      id: r.id,
-      nama: r.nama,
-      tipe: (r.tipe === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
-      nominal: toNumber(r.nominal),
-      walletId: r.wallet_id,
-      subkategoriId: r.subkategori_id,
-      hariJatuhTempo: r.hari_jatuh_tempo,
-      terakhirDicatat: r.terakhir_dicatat,
-      aktif: r.aktif,
-    })),
-    error: null,
-  };
-}
-
-export async function insertBerulang(input: BerulangInput): Promise<WriteResult> {
-  const { error } = await supabase.from('transaksi_berulang').insert({
-    nama: input.nama.trim(),
-    tipe: input.tipe,
-    nominal: input.nominal,
-    wallet_id: input.walletId,
-    subkategori_id: input.subkategoriId,
-    hari_jatuh_tempo: input.hariJatuhTempo,
-    tanggal_mulai: input.tanggalMulai,
-  });
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-export async function updateBerulangAktif(id: string, aktif: boolean): Promise<WriteResult> {
-  const { error } = await supabase.from('transaksi_berulang').update({ aktif }).eq('id', id);
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
-}
-
-export async function deleteBerulangRow(id: string): Promise<WriteResult> {
-  const { error } = await supabase.from('transaksi_berulang').delete().eq('id', id);
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
+  return (data as SubkategoriDbRow[]).map((r) => ({
+    id: r.id,
+    nama: r.nama,
+    kategori: r.kategori,
+    jenis: (r.jenis === 'Pemasukan' ? 'Pemasukan' : 'Pengeluaran') as TransactionType,
+    budgeting: (r.budgeting as Budgeting | null) ?? null,
+  }));
 }
 
 /**
@@ -1119,5 +914,209 @@ export async function fetchLatestAiReport(
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Gagal memuat riwayat insight.';
     return { report: null, error: msg };
+  }
+}
+
+/* ---------- Detail dompet: riwayat, grafik saldo, persen perubahan ---------- */
+
+export type RiwayatJenis = 'Pemasukan' | 'Pengeluaran' | 'Transfer masuk' | 'Transfer keluar';
+
+export interface WalletRiwayatRow {
+  id: string;
+  tanggal: string;
+  deskripsi: string;
+  jenis: RiwayatJenis;
+  nominal: number;
+  /** Efek ke saldo dompet ini: positif menambah, negatif mengurangi. */
+  efek: number;
+  kategori: string | null;
+  /** Nama dompet lawan untuk transfer. */
+  lawan: string | null;
+}
+
+export interface WalletSeriesPoint {
+  bulan: string;
+  /** Saldo di akhir bulan tersebut. Titik terakhir = saldo sekarang. */
+  saldo: number;
+}
+
+export interface WalletInsight {
+  saldoSekarang: number;
+  /** Saldo di akhir bulan lalu (= awal bulan ini). */
+  saldoAwalBulan: number;
+  perubahanBulan: number;
+  /** Persen perubahan terhadap saldo awal bulan. Null bila saldo awal bulan 0. */
+  persenBulan: number | null;
+  /** 6 titik, dari 5 bulan lalu sampai bulan ini. */
+  series: WalletSeriesPoint[];
+  /** Terbaru di atas. */
+  riwayat: WalletRiwayatRow[];
+  /** Pengeluaran bulan ini per kategori, terbesar di atas. */
+  pengeluaranBulanIni: { kategori: string; total: number }[];
+}
+
+export interface WalletInsightsResult {
+  byWallet: Record<string, WalletInsight>;
+  error: string | null;
+}
+
+interface WalletInsightTxRow {
+  id: string;
+  tanggal: string;
+  deskripsi: string;
+  tipe: string;
+  nominal: number | string;
+  kategori: string | null;
+  wallet_id: string | null;
+}
+
+interface WalletInsightTransferRow {
+  id: string;
+  tanggal: string;
+  nominal: number | string;
+  from_wallet_id: string;
+  to_wallet_id: string;
+}
+
+interface WalletInsightWalletRow {
+  id: string;
+  nama: string;
+  saldo: number | string;
+}
+
+/** Tanggal YYYY-MM-DD untuk hari terakhir bulan tertentu (monthOffset 0 = bulan ini). */
+function akhirBulan(now: Date, monthOffset: number): string {
+  const d = new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Data untuk halaman detail dompet dan persen di kartu. Saldo masa lalu dihitung mundur dari
+ * saldo sekarang dan semua pergerakan setelahnya (transaksi dan transfer), sehingga tidak perlu
+ * tabel riwayat saldo. Transfer dihitung di sini; biaya admin sudah tercatat sebagai transaksi.
+ */
+export async function fetchWalletInsights(): Promise<WalletInsightsResult> {
+  try {
+    const [wRes, tRes, trRes] = await Promise.all([
+      supabase.from('wallets').select('id,nama,saldo').eq('is_archived', false),
+      supabase.from('transactions').select('id,tanggal,deskripsi,tipe,nominal,kategori,wallet_id'),
+      supabase.from('wallet_transfers').select('id,tanggal,nominal,from_wallet_id,to_wallet_id'),
+    ]);
+    if (wRes.error) throw wRes.error;
+    if (tRes.error) throw tRes.error;
+    if (trRes.error) throw trRes.error;
+
+    const wallets = (wRes.data ?? []) as WalletInsightWalletRow[];
+    const namaById = new Map(wallets.map((w) => [w.id, w.nama]));
+    const txs = (tRes.data ?? []) as WalletInsightTxRow[];
+    const transfers = (trRes.data ?? []) as WalletInsightTransferRow[];
+
+    const now = new Date();
+    const awalBulanIni = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const akhirBulanIni = akhirBulan(now, 0);
+
+    const byWallet: Record<string, WalletInsight> = {};
+
+    for (const w of wallets) {
+      const riwayat: WalletRiwayatRow[] = [];
+      const perubahan: { tanggal: string; efek: number }[] = [];
+
+      for (const t of txs) {
+        if (t.wallet_id !== w.id) continue;
+        const nominal = toNumber(t.nominal);
+        const isMasuk = t.tipe === 'Pemasukan';
+        const efek = isMasuk ? nominal : -nominal;
+        riwayat.push({
+          id: t.id,
+          tanggal: t.tanggal,
+          deskripsi: t.deskripsi,
+          jenis: isMasuk ? 'Pemasukan' : 'Pengeluaran',
+          nominal,
+          efek,
+          kategori: t.kategori,
+          lawan: null,
+        });
+        perubahan.push({ tanggal: t.tanggal, efek });
+      }
+
+      for (const tr of transfers) {
+        const nominal = toNumber(tr.nominal);
+        if (tr.from_wallet_id === w.id) {
+          riwayat.push({
+            id: tr.id,
+            tanggal: tr.tanggal,
+            deskripsi: `Transfer ke ${namaById.get(tr.to_wallet_id) ?? 'dompet lain'}`,
+            jenis: 'Transfer keluar',
+            nominal,
+            efek: -nominal,
+            kategori: null,
+            lawan: namaById.get(tr.to_wallet_id) ?? null,
+          });
+          perubahan.push({ tanggal: tr.tanggal, efek: -nominal });
+        } else if (tr.to_wallet_id === w.id) {
+          riwayat.push({
+            id: tr.id,
+            tanggal: tr.tanggal,
+            deskripsi: `Transfer dari ${namaById.get(tr.from_wallet_id) ?? 'dompet lain'}`,
+            jenis: 'Transfer masuk',
+            nominal,
+            efek: nominal,
+            kategori: null,
+            lawan: namaById.get(tr.from_wallet_id) ?? null,
+          });
+          perubahan.push({ tanggal: tr.tanggal, efek: nominal });
+        }
+      }
+
+      riwayat.sort((a, b) => (a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : 0));
+
+      const saldoSekarang = toNumber(w.saldo);
+      // Saldo pada tanggal D = saldo sekarang dikurangi efek setelah D.
+      const efekSejak = (dariTanggal: string) =>
+        perubahan.filter((p) => p.tanggal >= dariTanggal).reduce((s, p) => s + p.efek, 0);
+      const efekSetelah = (tanggal: string) =>
+        perubahan.filter((p) => p.tanggal > tanggal).reduce((s, p) => s + p.efek, 0);
+
+      const saldoAwalBulan = saldoSekarang - efekSejak(awalBulanIni);
+      const perubahanBulan = saldoSekarang - saldoAwalBulan;
+      const persenBulan =
+        saldoAwalBulan !== 0 ? Math.round((perubahanBulan / Math.abs(saldoAwalBulan)) * 1000) / 10 : null;
+
+      const series: WalletSeriesPoint[] = [];
+      for (let i = -5; i <= 0; i++) {
+        const tanggal = akhirBulan(now, i);
+        const bulanIdx = new Date(now.getFullYear(), now.getMonth() + i, 1).getMonth();
+        series.push({
+          bulan: shortMonth(bulanIdx),
+          saldo: saldoSekarang - efekSetelah(tanggal) - (i === 0 ? 0 : 0),
+        });
+      }
+      // Titik bulan ini memakai saldo sekarang, supaya tepat sama dengan kartu.
+      series[series.length - 1] = { bulan: series[series.length - 1].bulan, saldo: saldoSekarang };
+
+      const perKategori = new Map<string, number>();
+      for (const r of riwayat) {
+        if (r.jenis !== 'Pengeluaran' || r.tanggal < awalBulanIni || r.tanggal > akhirBulanIni) continue;
+        const k = r.kategori ?? 'Tanpa kategori';
+        perKategori.set(k, (perKategori.get(k) ?? 0) + r.nominal);
+      }
+
+      byWallet[w.id] = {
+        saldoSekarang,
+        saldoAwalBulan,
+        perubahanBulan,
+        persenBulan,
+        series,
+        riwayat,
+        pengeluaranBulanIni: [...perKategori.entries()]
+          .map(([kategori, total]) => ({ kategori, total }))
+          .sort((a, b) => b.total - a.total),
+      };
+    }
+
+    return { byWallet, error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Gagal memuat detail dompet.';
+    return { byWallet: {}, error: msg };
   }
 }
