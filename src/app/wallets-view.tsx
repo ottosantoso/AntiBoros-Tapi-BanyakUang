@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Archive, Eye, EyeOff, Pencil, Plus, RotateCcw } from 'lucide-react';
+import { Archive, ChevronRight, Eye, EyeOff, Pencil, Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DashboardData, Wallet } from '@/lib/types';
 import { WalletGrid } from '@/components/wallet-card';
@@ -19,20 +19,20 @@ import {
 import {
   archiveWalletRow,
   fetchArchivedWallets,
+  fetchWalletInsights,
   restoreWalletRow,
   type ArchivedWallet,
   type WalletEditInput,
   type WriteResult,
 } from '@/lib/data';
 import { EditWalletSheet } from '@/components/edit-wallet-sheet';
+import { PaginationBar, usePagination } from '@/components/pagination-bar';
 import { formatIDR, formatIDRCompact } from '@/lib/format';
 import { getWalletMeta } from '@/lib/wallets';
-import { PaginationBar, usePagination } from '@/components/pagination-bar';
-
-const ARCHIVED_PAGE_SIZE = 10;
 
 /** Angka saldo yang disamarkan saat mode sembunyi aktif. */
 const MASKED = 'Rp •••••••';
+const ARCHIVED_PAGE_SIZE = 10;
 
 export function WalletsView({
   data,
@@ -40,6 +40,7 @@ export function WalletsView({
   onAddWallet,
   editWallet,
   onChanged,
+  onOpenDetail,
 }: {
   data: DashboardData;
   loading: boolean;
@@ -47,6 +48,8 @@ export function WalletsView({
   editWallet: (id: string, input: WalletEditInput) => Promise<WriteResult>;
   /** Dipanggil setelah dompet diarsipkan atau dipulihkan, agar data dashboard ikut diperbarui. */
   onChanged: () => void;
+  /** Dipanggil dengan id dompet untuk membuka halaman detail. */
+  onOpenDetail: (walletId: string) => void;
 }) {
   const wallets = data.dompet;
   const positive = wallets.filter((w) => w.saldo >= 0);
@@ -56,6 +59,7 @@ export function WalletsView({
 
   const [archived, setArchived] = useState<ArchivedWallet[]>([]);
   const archivedPage = usePagination(archived, ARCHIVED_PAGE_SIZE, '');
+  const [persenById, setPersenById] = useState<Record<string, number | null>>({});
   const [target, setTarget] = useState<Wallet | null>(null);
   const [editTarget, setEditTarget] = useState<Wallet | null>(null);
   const [busy, setBusy] = useState(false);
@@ -75,6 +79,21 @@ export function WalletsView({
   useEffect(() => {
     muatArsip();
   }, [data, muatArsip]);
+
+  // Persen perubahan dihitung ulang hanya saat saldo total atau jumlah dompet berubah,
+  // supaya polling 30 detik tidak mengambil seluruh riwayat setiap kali.
+  useEffect(() => {
+    let aktif = true;
+    fetchWalletInsights().then((res) => {
+      if (!aktif || res.error) return;
+      const hasil: Record<string, number | null> = {};
+      for (const [id, info] of Object.entries(res.byWallet)) hasil[id] = info.persenBulan;
+      setPersenById(hasil);
+    });
+    return () => {
+      aktif = false;
+    };
+  }, [data.totalSaldo, data.dompet.length]);
 
   async function arsipkan() {
     if (!target) return;
@@ -170,7 +189,13 @@ export function WalletsView({
         </Button>
       </div>
 
-      <WalletGrid wallets={wallets} loading={loading} sembunyi={sembunyi} />
+      <WalletGrid
+        wallets={wallets}
+        loading={loading}
+        sembunyi={sembunyi}
+        persenById={persenById}
+        onOpen={onOpenDetail}
+      />
 
       {/* Detailed table */}
       {!loading && wallets.length > 0 && (
@@ -207,6 +232,16 @@ export function WalletsView({
                       <p className="text-[11px] font-medium text-expense">Saldo minus</p>
                     )}
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onOpenDetail(w.id)}
+                    aria-label={`Lihat detail ${w.nama}`}
+                    title="Lihat detail"
+                  >
+                    Detail
+                    <ChevronRight className="ml-0.5 h-4 w-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
