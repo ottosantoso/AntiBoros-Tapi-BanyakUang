@@ -13,24 +13,24 @@ export function WalletCard({
   wallet,
   index = 0,
   sembunyi = false,
+  persen = null,
+  onOpen,
 }: {
   wallet: Wallet;
   index?: number;
   /** Jika true, saldo disamarkan. Badge minus tetap tampil supaya kondisi dompet tetap terlihat. */
   sembunyi?: boolean;
+  /** Persen perubahan bulan ini. Null bila belum tersedia atau saldo awal bulan 0. */
+  persen?: number | null;
+  /** Dipanggil saat kartu diklik. Bila tidak diisi, kartu tidak bisa diklik. */
+  onOpen?: () => void;
 }) {
   const meta = getWalletMeta(wallet);
   // Logo unggahan dulu; kalau tidak ada, pakai logo katalog untuk provider ini.
   const logo = meta.logoUrl ?? providerLogo(wallet.provider);
-  return (
-    <div
-      className={cn(
-        // Tinggi pakai min-h, bukan aspect-ratio: di iOS Safari aspect-ratio + h-full membuat nominal terpotong.
-        'lift group relative flex min-h-[14rem] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg transition-all duration-300 hover:shadow-xl sm:min-h-[15rem] sm:p-5',
-        meta.gradient,
-      )}
-      style={{ animationDelay: `${index * 60}ms` }}
-    >
+
+  const isi = (
+    <>
       {/* glossy highlight */}
       <div className="pointer-events-none absolute -right-8 -top-12 h-32 w-32 rounded-full bg-white/15 blur-2xl" />
       <div className="pointer-events-none absolute -bottom-10 -left-6 h-28 w-28 rounded-full bg-black/10 blur-2xl" />
@@ -75,14 +75,46 @@ export function WalletCard({
               </>
             )}
           </p>
+          {persen !== null && (
+            <p className="mt-0.5 text-[11px] font-semibold tnum text-white/90">
+              {persen > 0 ? '+' : ''}
+              {persen.toLocaleString('id-ID', { maximumFractionDigits: 1 })}% bulan ini
+            </p>
+          )}
         </div>
 
         {meta.negative && (
-          <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-rose-600 shadow">
+          <div className="absolute right-0 top-0 flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-rose-600 shadow">
             <AlertTriangle className="h-3 w-3" /> Minus
           </div>
         )}
       </div>
+    </>
+  );
+
+  const kelas = cn(
+    // Tinggi pakai min-h, bukan aspect-ratio: di iOS Safari aspect-ratio + h-full membuat nominal terpotong.
+    'lift group relative flex min-h-[14rem] w-full flex-col overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg transition-all duration-300 hover:shadow-xl sm:min-h-[15rem] sm:p-5',
+    meta.gradient,
+  );
+
+  if (onOpen) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className={cn(kelas, 'text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2')}
+        style={{ animationDelay: `${index * 60}ms` }}
+        aria-label={`Lihat detail ${wallet.nama}`}
+      >
+        {isi}
+      </button>
+    );
+  }
+
+  return (
+    <div className={kelas} style={{ animationDelay: `${index * 60}ms` }}>
+      {isi}
     </div>
   );
 }
@@ -97,10 +129,16 @@ export function WalletGrid({
   wallets,
   loading,
   sembunyi = false,
+  persenById,
+  onOpen,
 }: {
   wallets: Wallet[];
   loading?: boolean;
   sembunyi?: boolean;
+  /** Persen perubahan per id dompet. */
+  persenById?: Record<string, number | null>;
+  /** Dipanggil dengan id dompet saat kartunya diklik. */
+  onOpen?: (walletId: string) => void;
 }) {
   if (loading) {
     return (
@@ -134,7 +172,14 @@ export function WalletGrid({
       )}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {wallets.map((w, i) => (
-          <WalletCard key={w.nama} wallet={w} index={i} sembunyi={sembunyi} />
+          <WalletCard
+            key={w.id}
+            wallet={w}
+            index={i}
+            sembunyi={sembunyi}
+            persen={persenById?.[w.id] ?? null}
+            onOpen={onOpen ? () => onOpen(w.id) : undefined}
+          />
         ))}
       </div>
     </div>
