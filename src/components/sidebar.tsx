@@ -81,7 +81,7 @@ export function Sidebar({
           <p className="truncate font-display text-[17px] font-extrabold leading-tight tracking-tight text-white">
             Hepeng History
           </p>
-          <p className="text-[11px] font-medium text-muted-foreground">Personal Finance Tracker</p>
+          <p className="text-[11px] font-medium text-muted-foreground">Pantau Duit & Pengeluaran Harianmu</p>
         </div>
       </div>
 

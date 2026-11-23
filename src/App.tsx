@@ -188,7 +188,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
           </main>
 
           <footer className="border-t border-border px-4 py-4 text-center text-xs text-muted-foreground md:px-6">
-            Hepeng History · Personal Finance Tracker
+            Hepeng History · Pantau Duit & Pengeluaran Harianmu
           </footer>
         </div>
       </div>

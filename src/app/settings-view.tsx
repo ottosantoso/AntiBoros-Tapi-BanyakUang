@@ -31,7 +31,7 @@ export function SettingsView(_props: Props) {
           </div>
           <div className="flex-1">
             <h3 className="font-display text-base font-bold tracking-tight">Tentang aplikasi</h3>
-            <p className="mt-0.5 text-sm text-muted-foreground">Hepeng History · Personal Finance Tracker</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">Hepeng History · Pantau Duit & Pengeluaran Harianmu</p>
           </div>
         </div>
 
