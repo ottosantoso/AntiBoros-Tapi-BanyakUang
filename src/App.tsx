@@ -9,6 +9,7 @@ import { thisMonthRange, type DateRangeValue } from '@/lib/date-range';
 import type { View, TransactionSection } from '@/app/views';
 import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
+import { WalletDetailView } from '@/app/wallet-detail-view';
 import { BudgetView } from '@/app/budget-view';
 import { AnalisaView } from '@/app/analisa-view';
 import { TransactionsView } from '@/app/transactions-view';
@@ -50,6 +51,8 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const [view, setView] = useState<View>('dashboard');
   const [txSection, setTxSection] = useState<TransactionSection>('all');
   const [walletSheetOpen, setWalletSheetOpen] = useState(false);
+  /** Dompet yang sedang dibuka di halaman detail. Null berarti daftar dompet. */
+  const [detailWalletId, setDetailWalletId] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
   const {
@@ -74,6 +77,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const handleNavigate = useCallback((nextView: View, section?: TransactionSection) => {
     setView(nextView);
     if (section) setTxSection(section);
+    setDetailWalletId(null);
     setNavOpen(false);
   }, []);
 
@@ -82,6 +86,8 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
     const { error: signOutError } = await supabase.auth.signOut();
     if (signOutError) toast.error('Gagal keluar', { description: signOutError.message });
   }, []);
+
+  const detailWallet = detailWalletId ? data.dompet.find((w) => w.id === detailWalletId) ?? null : null;
 
   return (
     <>
@@ -146,13 +152,17 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                   onNavigate={handleNavigate}
                 />
               )}
-              {view === 'wallets' && (
+              {view === 'wallets' && detailWallet && (
+                <WalletDetailView wallet={detailWallet} onBack={() => setDetailWalletId(null)} />
+              )}
+              {view === 'wallets' && !detailWallet && (
                 <WalletsView
                   data={data}
                   loading={loading}
                   onAddWallet={() => setWalletSheetOpen(true)}
                   editWallet={editWallet}
                   onChanged={handleRefresh}
+                  onOpenDetail={setDetailWalletId}
                 />
               )}
               {view === 'transactions' && (
