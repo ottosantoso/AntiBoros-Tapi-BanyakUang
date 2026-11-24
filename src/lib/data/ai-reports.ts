@@ -72,3 +72,41 @@ export async function fetchLatestAiReport(
     return { report: null, error: msg };
   }
 }
+
+/** Daftar semua riwayat insight AI, terbaru di atas. Batas 100 agar tetap ringan. */
+export type AiReportKind = 'dashboard' | 'analisa';
+
+export async function fetchAiReports(
+  kind?: AiReportKind,
+): Promise<{ reports: AiReportRecord[]; error: string | null }> {
+  try {
+    let query = supabase
+      .from('ai_reports')
+      .select('id,kind,created_at,period_start,period_end,narrative')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    if (kind) query = query.eq('kind', kind);
+    const { data, error } = await query;
+    if (error) return { reports: [], error: error.message };
+    const reports = ((data ?? []) as Array<{
+      id: string;
+      kind: string;
+      created_at: string;
+      period_start: string;
+      period_end: string;
+      narrative: { insights?: string[]; hemat?: string[] } | null;
+    }>).map((row) => ({
+      id: row.id,
+      kind: row.kind as AiReportKind,
+      createdAt: row.created_at,
+      periodStart: row.period_start,
+      periodEnd: row.period_end,
+      insights: row.narrative?.insights ?? [],
+      hemat: row.narrative?.hemat ?? [],
+    }));
+    return { reports, error: null };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Gagal memuat riwayat insight.';
+    return { reports: [], error: msg };
+  }
+}
