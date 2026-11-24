@@ -1,5 +1,6 @@
 import { supabase } from '../supabase-client';
 import { toNumber, type WriteResult } from './shared';
+import { defaultKelompok, type Kelompok } from '../rencana-math';
 
 /* ---------- Rencana bulanan ---------- */
 
@@ -12,6 +13,8 @@ export interface RencanaItem {
   nama: string;
   nominal: number;
   kategori: string | null;
+  /** Kelompok 50/30/20. Hanya untuk pengeluaran, null untuk pemasukan. */
+  kelompok: Kelompok | null;
 }
 
 export interface Rencana {
@@ -19,7 +22,6 @@ export interface Rencana {
   /** Tanggal pertama bulan, format YYYY-MM-DD. */
   bulan: string;
   nama: string;
-  budget: number;
   status: RencanaStatus;
   catatan: string | null;
   items: RencanaItem[];
@@ -28,7 +30,6 @@ export interface Rencana {
 export interface RencanaInput {
   bulan: string;
   nama: string;
-  budget: number;
   catatan?: string | null;
 }
 
@@ -37,13 +38,13 @@ export interface RencanaItemInput {
   nama: string;
   nominal: number;
   kategori: string | null;
+  kelompok: Kelompok | null;
 }
 
 interface RencanaDbRow {
   id: string;
   bulan: string;
   nama: string;
-  budget: number | string;
   status: string;
   catatan: string | null;
   rencana_item: {
@@ -52,11 +53,16 @@ interface RencanaDbRow {
     nama: string;
     nominal: number | string;
     kategori: string | null;
+    kelompok: string | null;
   }[] | null;
 }
 
 function mapStatus(value: string): RencanaStatus {
   return value === 'aktif' || value === 'ditutup' ? value : 'draft';
+}
+
+function mapKelompok(value: string | null): Kelompok | null {
+  return value === 'kebutuhan' || value === 'keinginan' || value === 'investasi' ? value : null;
 }
 
 function messageFor(error: { code?: string; message: string }): string {
@@ -67,7 +73,7 @@ function messageFor(error: { code?: string; message: string }): string {
 export async function fetchRencanaList(): Promise<{ data: Rencana[]; error: string | null }> {
   const { data, error } = await supabase
     .from('rencana_bulanan')
-    .select('id,bulan,nama,budget,status,catatan,rencana_item(id,jenis,nama,nominal,kategori)')
+    .select('id,bulan,nama,status,catatan,rencana_item(id,jenis,nama,nominal,kategori,kelompok)')
     .order('bulan', { ascending: false });
   if (error) return { data: [], error: error.message };
   return {
@@ -75,7 +81,6 @@ export async function fetchRencanaList(): Promise<{ data: Rencana[]; error: stri
       id: r.id,
       bulan: r.bulan,
       nama: r.nama,
-      budget: toNumber(r.budget),
       status: mapStatus(r.status),
       catatan: r.catatan,
       items: (r.rencana_item ?? []).map((i) => ({
@@ -84,6 +89,7 @@ export async function fetchRencanaList(): Promise<{ data: Rencana[]; error: stri
         nama: i.nama,
         nominal: toNumber(i.nominal),
         kategori: i.kategori,
+        kelompok: i.jenis === 'pengeluaran' ? mapKelompok(i.kelompok) ?? defaultKelompok(i.kategori) : null,
       })),
     })),
     error: null,
@@ -93,7 +99,7 @@ export async function fetchRencanaList(): Promise<{ data: Rencana[]; error: stri
 export async function createRencana(input: RencanaInput): Promise<WriteResult & { id: string | null }> {
   const { data, error } = await supabase
     .from('rencana_bulanan')
-    .insert({ bulan: input.bulan, nama: input.nama, budget: input.budget, catatan: input.catatan ?? null, status: 'draft' })
+    .insert({ bulan: input.bulan, nama: input.nama, catatan: input.catatan ?? null, status: 'draft' })
     .select('id')
     .single();
   if (error) return { success: false, error: messageFor(error), id: null };
@@ -102,7 +108,7 @@ export async function createRencana(input: RencanaInput): Promise<WriteResult & 
 
 export async function updateRencana(
   id: string,
-  patch: Partial<Pick<RencanaInput, 'nama' | 'budget' | 'catatan'>> & { status?: RencanaStatus },
+  patch: Partial<Pick<RencanaInput, 'nama' | 'catatan'>> & { status?: RencanaStatus },
 ): Promise<WriteResult> {
   const { error } = await supabase
     .from('rencana_bulanan')
@@ -125,7 +131,14 @@ export async function insertRencanaItem(rencanaId: string, input: RencanaItemInp
     nama: input.nama,
     nominal: input.nominal,
     kategori: input.jenis === 'pengeluaran' ? input.kategori : null,
+    kelompok: input.jenis === 'pengeluaran' ? input.kelompok ?? 'kebutuhan' : null,
   });
+  if (error) return { success: false, error: messageFor(error) };
+  return { success: true, error: null };
+}
+
+export async function updateRencanaItemKelompok(id: string, kelompok: Kelompok): Promise<WriteResult> {
+  const { error } = await supabase.from('rencana_item').update({ kelompok }).eq('id', id);
   if (error) return { success: false, error: messageFor(error) };
   return { success: true, error: null };
 }
