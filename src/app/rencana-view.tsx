@@ -9,6 +9,7 @@ import {
   insertRencanaItem,
   updateRencana,
   updateRencanaItemKelompok,
+  updateRencanaModel,
   type Rencana,
   type RencanaItem,
   type RencanaJenis,
@@ -31,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { usePagination } from '@/components/pagination-bar';
 import { NumberedPagination } from '@/components/numbered-pagination';
+import { ModelSelector } from '@/components/rencana-model-selector';
 import { cn } from '@/lib/utils';
 import { formatIDR, formatSignedIDR } from '@/lib/format';
 import { formatRupiahInput, parseRupiahInput } from '@/lib/rupiah-input';
@@ -39,12 +41,15 @@ import {
   RENCANA_KATEGORI,
   categoryBreakdown,
   defaultKelompok,
+  getModel,
   kelompokTargets,
   monthKey,
   monthLabel,
   summarizeRencana,
   type Kelompok,
   type KelompokRow,
+  type ModelKode,
+  type Persen,
   type TargetStatus,
 } from '@/lib/rencana-math';
 
@@ -238,34 +243,51 @@ function PlanDetail({
   setBusy: (value: boolean) => void;
 }) {
   const summary = summarizeRencana(rencana.items);
-  const targets = kelompokTargets(summary.pemasukan, rencana.items);
+  const targets = kelompokTargets(summary.pemasukan, rencana.items, rencana.persen);
   const breakdown = categoryBreakdown(rencana.items);
   const editable = rencana.status !== 'ditutup';
   const maxBreakdown = breakdown[0]?.total ?? 0;
 
+  async function saveModel(model: ModelKode, persen: Persen) {
+    setBusy(true);
+    const res = await updateRencanaModel(rencana.id, model, persen);
+    setBusy(false);
+    if (!res.success) return toast.error('Gagal menyimpan model', { description: res.error ?? undefined });
+    toast.success(`Model diubah ke ${persen.kebutuhan}/${persen.keinginan}/${persen.investasi}`);
+    onChanged();
+  }
+
   return (
     <div className="space-y-4 sm:space-y-5">
-      <Card className="flex flex-col gap-3 rounded-2xl p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+      <Card className="flex flex-col gap-4 rounded-2xl p-4 sm:p-5 md:flex-row md:items-start md:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <h2 className="truncate font-display text-base font-extrabold sm:text-lg">{rencana.nama}</h2>
           <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold', STATUS_CLASS[rencana.status])}>
             {STATUS_LABEL[rencana.status]}
           </span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {rencana.status === 'draft' && (
-            <Button size="sm" disabled={busy} onClick={() => onChangeStatus('aktif')} className="gap-2 rounded-full font-bold">
-              <CheckCircle2 className="h-4 w-4" /> Aktifkan rencana
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end md:justify-end">
+          <ModelSelector
+            model={rencana.model}
+            persen={rencana.persen}
+            disabled={!editable || busy}
+            onSave={saveModel}
+          />
+          <div className="flex flex-wrap gap-2">
+            {rencana.status === 'draft' && (
+              <Button size="sm" disabled={busy} onClick={() => onChangeStatus('aktif')} className="gap-2 rounded-full font-bold">
+                <CheckCircle2 className="h-4 w-4" /> Aktifkan rencana
+              </Button>
+            )}
+            {rencana.status === 'aktif' && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => onChangeStatus('ditutup')} className="gap-2 rounded-full font-bold">
+                <Lock className="h-4 w-4" /> Tutup bulan
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="gap-2 rounded-full font-bold text-destructive hover:text-destructive">
+              <Trash2 className="h-4 w-4" /> Hapus
             </Button>
-          )}
-          {rencana.status === 'aktif' && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => onChangeStatus('ditutup')} className="gap-2 rounded-full font-bold">
-              <Lock className="h-4 w-4" /> Tutup bulan
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="gap-2 rounded-full font-bold text-destructive hover:text-destructive">
-            <Trash2 className="h-4 w-4" /> Hapus
-          </Button>
+          </div>
         </div>
       </Card>
 
@@ -281,7 +303,7 @@ function PlanDetail({
         <Stat label="Budget" value={formatIDR(summary.budget)} hint="Sama dengan total pemasukan" />
       </div>
 
-      <TargetCard pemasukan={summary.pemasukan} targets={targets} />
+      <TargetCard pemasukan={summary.pemasukan} targets={targets} model={rencana.model} persen={rencana.persen} />
 
       <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.25fr_1fr]">
         <ItemsCard rencana={rencana} editable={editable} busy={busy} onChanged={onChanged} setBusy={setBusy} />
@@ -312,11 +334,24 @@ function PlanDetail({
   );
 }
 
-function TargetCard({ pemasukan, targets }: { pemasukan: number; targets: KelompokRow[] }) {
+function TargetCard({
+  pemasukan,
+  targets,
+  model,
+  persen,
+}: {
+  pemasukan: number;
+  targets: KelompokRow[];
+  model: ModelKode;
+  persen: Persen;
+}) {
+  const title = `Target ${persen.kebutuhan}/${persen.keinginan}/${persen.investasi}`;
   return (
     <Card className="rounded-2xl p-4 sm:p-5">
-      <h3 className="font-display text-base font-extrabold">Target 50/30/20</h3>
-      <p className="text-xs text-muted-foreground">Dihitung dari total pemasukan {formatIDR(pemasukan)}.</p>
+      <h3 className="font-display text-base font-extrabold">{title}</h3>
+      <p className="text-xs text-muted-foreground">
+        Model: {getModel(model).nama}. Dihitung dari total pemasukan {formatIDR(pemasukan)}.
+      </p>
       {pemasukan === 0 ? (
         <p className="mt-4 text-sm text-muted-foreground">Isi pemasukan dulu untuk melihat target tiap kelompok.</p>
       ) : (
