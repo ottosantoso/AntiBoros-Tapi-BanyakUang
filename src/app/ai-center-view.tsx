@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { AiSection } from '@/app/views';
 import { AiAsistenView } from '@/app/ai-asisten-view';
+import { AiRiwayatView } from '@/app/ai-riwayat-view';
 import { cn } from '@/lib/utils';
 
 type SubSection = Exclude<AiSection, 'hub'>;
@@ -27,10 +28,10 @@ const SUB_ITEMS: { id: SubSection; title: string; desc: string; icon: typeof Spa
   {
     id: 'riwayat',
     title: 'Riwayat AI',
-    desc: 'Melihat hasil insight AI yang pernah dibuat dan riwayat percakapan.',
+    desc: 'Melihat hasil insight AI yang pernah dibuat, lengkap dengan periodenya.',
     icon: History,
     tone: 'bg-sky-500/15 text-sky-300',
-    aktif: false,
+    aktif: true,
   },
 ];
 
@@ -126,18 +127,16 @@ export function AiCenterView({
     );
   }
 
-  // riwayat: placeholder sampai PR Riwayat AI di-merge
-  return (
-    <div className="space-y-5">
-      {back}
-      <Card className="p-5">
-        <h2 className="font-display text-lg font-bold tracking-tight">Riwayat AI</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Daftar insight AI yang pernah dibuat, lengkap dengan periodenya. Akan hadir setelah fitur insight disimpan.
-        </p>
-      </Card>
-    </div>
-  );
+  if (section === 'riwayat') {
+    return (
+      <div className="space-y-5">
+        {back}
+        <AiRiwayatView />
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function HubCard({
