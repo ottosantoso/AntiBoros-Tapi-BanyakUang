@@ -3,7 +3,6 @@ import type { DashboardData, MonthlyTrend, Transaction } from '../types';
 import { shortMonth } from '../format';
 import { walletFromRow, type WalletRow } from './wallets';
 import { transactionFromRow, type TransactionRow } from './transactions';
-import { toNumber as _toNumber } from './shared';
 
 /* ---------- Dashboard: agregat satu rentang ---------- */
 
