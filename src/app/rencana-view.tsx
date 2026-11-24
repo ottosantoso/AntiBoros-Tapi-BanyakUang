@@ -28,7 +28,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { formatIDR } from '@/lib/format';
+import { formatIDR, formatSignedIDR } from '@/lib/format';
+import { formatRupiahInput, parseRupiahInput } from '@/lib/rupiah-input';
 import {
   RENCANA_KATEGORI,
   categoryBreakdown,
@@ -264,7 +265,7 @@ function PlanDetail({
         />
       </div>
       <p className="-mt-2 text-xs text-muted-foreground">
-        Sisa rencana (pemasukan dikurangi pengeluaran): <span className="font-bold">{formatIDR(summary.sisaRencana)}</span>
+        Sisa rencana (pemasukan dikurangi pengeluaran): <span className="font-bold">{formatSignedIDR(summary.sisaRencana)}</span>
         {summary.sisaRencana < 0 && ' — pengeluaran rencana lebih besar dari pemasukan.'}
       </p>
 
@@ -317,9 +318,10 @@ function ItemsCard({
   const [error, setError] = useState<string | null>(null);
 
   async function addItem() {
-    const value = Number(nominal);
+    // Nominal boleh kosong atau 0 (misalnya item yang belum tahu jumlahnya). Total menghitung 0.
+    const value = nominal === '' ? 0 : Number(nominal);
     if (!nama.trim()) return setError('Isi nama item terlebih dahulu.');
-    if (!Number.isFinite(value) || value <= 0) return setError('Nominal harus lebih dari 0.');
+    if (!Number.isFinite(value) || value < 0) return setError('Nominal tidak valid.');
     setError(null);
     setBusy(true);
     const res = await insertRencanaItem(rencana.id, { jenis, nama: nama.trim(), nominal: Math.round(value), kategori });
@@ -364,7 +366,7 @@ function ItemsCard({
           </div>
           <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
             <Input aria-label="Nama item" placeholder="Nama, misal: Makan di luar" value={nama} onChange={(e) => setNama(e.target.value)} />
-            <Input aria-label="Nominal" type="number" inputMode="numeric" min={0} placeholder="Nominal" value={nominal} onChange={(e) => setNominal(e.target.value)} />
+            <Input aria-label="Nominal (opsional)" inputMode="numeric" placeholder="Rp 0 (opsional)" value={formatRupiahInput(nominal)} onChange={(e) => setNominal(parseRupiahInput(e.target.value))} />
           </div>
           {jenis === 'pengeluaran' && (
             <select
@@ -478,7 +480,7 @@ function CreatePlanDialog({
 
   async function submit() {
     if (!/^\d{4}-\d{2}$/.test(month)) return setError('Pilih bulan terlebih dahulu.');
-    const value = budget.trim() === '' ? 0 : Number(budget);
+    const value = budget === '' ? 0 : Number(budget);
     if (!Number.isFinite(value) || value < 0) return setError('Budget tidak boleh negatif.');
     setError(null);
     const bulan = `${month}-01`;
@@ -507,7 +509,7 @@ function CreatePlanDialog({
           </label>
           <label className="block space-y-1.5 text-xs font-bold">
             Budget pengeluaran bulan ini
-            <Input type="number" inputMode="numeric" min={0} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="Rp" />
+            <Input inputMode="numeric" value={formatRupiahInput(budget)} onChange={(e) => setBudget(parseRupiahInput(e.target.value))} placeholder="Rp 0" />
           </label>
           {error && <p className="text-xs font-bold text-destructive">{error}</p>}
         </div>
