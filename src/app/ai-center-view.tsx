@@ -2,6 +2,7 @@ import { ClipboardList, History, MessageSquare, Sparkles, Tags } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { AiSection } from '@/app/views';
+import { AiAsistenView } from '@/app/ai-asisten-view';
 import { cn } from '@/lib/utils';
 
 type SubSection = Exclude<AiSection, 'hub'>;
@@ -21,7 +22,7 @@ const SUB_ITEMS: { id: SubSection; title: string; desc: string; icon: typeof Spa
     desc: 'Chat dengan AI untuk bertanya tentang kondisi keuangan dan meminta saran.',
     icon: MessageSquare,
     tone: 'bg-violet-500/15 text-violet-300',
-    aktif: false,
+    aktif: true,
   },
   {
     id: 'riwayat',
@@ -116,23 +117,24 @@ export function AiCenterView({
     );
   }
 
-  // asisten dan riwayat belum dibangun: tampilkan status yang jelas, bukan halaman kosong
-  const info =
-    section === 'asisten'
-      ? {
-          title: 'Asisten Keuangan AI',
-          desc: 'Tanya apa saja tentang keuanganmu dan minta saran berdasarkan ringkasan angka bulan ini. Akan hadir di Fase C.',
-        }
-      : {
-          title: 'Riwayat AI',
-          desc: 'Daftar insight AI yang pernah dibuat, lengkap dengan periodenya. Akan hadir setelah fitur insight disimpan.',
-        };
+  if (section === 'asisten') {
+    return (
+      <div className="space-y-5">
+        {back}
+        <AiAsistenView />
+      </div>
+    );
+  }
+
+  // riwayat: placeholder sampai PR Riwayat AI di-merge
   return (
     <div className="space-y-5">
       {back}
       <Card className="p-5">
-        <h2 className="font-display text-lg font-bold tracking-tight">{info.title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{info.desc}</p>
+        <h2 className="font-display text-lg font-bold tracking-tight">Riwayat AI</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Daftar insight AI yang pernah dibuat, lengkap dengan periodenya. Akan hadir setelah fitur insight disimpan.
+        </p>
       </Card>
     </div>
   );
