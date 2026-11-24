@@ -11,6 +11,7 @@ import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
 import { WalletDetailView } from '@/app/wallet-detail-view';
 import { BudgetView } from '@/app/budget-view';
+import { RencanaView } from '@/app/rencana-view';
 import { AnalisaView } from '@/app/analisa-view';
 import { TransactionsView } from '@/app/transactions-view';
 import { AiScannerPage } from '@/app/ai-scanner-page';
@@ -191,6 +192,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                 />
               )}
               {view === 'budget' && <BudgetView />}
+              {view === 'rencana' && <RencanaView />}
               {view === 'analisa' && (
                 <AnalisaView onGoTransactions={() => handleNavigate('transactions')} syncKey={data} />
               )}
