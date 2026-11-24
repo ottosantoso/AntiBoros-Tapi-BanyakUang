@@ -3,6 +3,8 @@ import type { WriteResult } from './shared';
 
 /* ---------- Riwayat insight AI (tabel ai_reports) ---------- */
 
+export type AiReportKind = 'dashboard' | 'analisa';
+
 export interface AiReportRecord {
   id: string;
   createdAt: string;
@@ -12,9 +14,14 @@ export interface AiReportRecord {
   hemat: string[];
 }
 
+/** Satu baris riwayat untuk daftar: sama seperti AiReportRecord, ditambah jenis tampilannya. */
+export interface AiReportItem extends AiReportRecord {
+  kind: AiReportKind;
+}
+
 /** Simpan hasil insight AI sebagai riwayat. Gagal simpan tidak membatalkan tampilan hasil. */
 export async function saveAiReport(input: {
-  kind: 'dashboard' | 'analisa';
+  kind: AiReportKind;
   periodStart: string;
   periodEnd: string;
   metrics: Record<string, unknown>;
@@ -38,7 +45,7 @@ export async function saveAiReport(input: {
 
 /** Insight AI terakhir untuk satu jenis tampilan. Null bila belum pernah dibuat. */
 export async function fetchLatestAiReport(
-  kind: 'dashboard' | 'analisa',
+  kind: AiReportKind,
 ): Promise<{ report: AiReportRecord | null; error: string | null }> {
   try {
     const { data, error } = await supabase
@@ -73,12 +80,10 @@ export async function fetchLatestAiReport(
   }
 }
 
-/** Daftar semua riwayat insight AI, terbaru di atas. Batas 100 agar tetap ringan. */
-export type AiReportKind = 'dashboard' | 'analisa';
-
+/** Daftar riwayat insight AI, terbaru di atas. Dibatasi 100 baris agar tetap ringan. */
 export async function fetchAiReports(
   kind?: AiReportKind,
-): Promise<{ reports: AiReportRecord[]; error: string | null }> {
+): Promise<{ reports: AiReportItem[]; error: string | null }> {
   try {
     let query = supabase
       .from('ai_reports')
@@ -88,16 +93,16 @@ export async function fetchAiReports(
     if (kind) query = query.eq('kind', kind);
     const { data, error } = await query;
     if (error) return { reports: [], error: error.message };
-    const reports = ((data ?? []) as Array<{
+    const reports: AiReportItem[] = ((data ?? []) as Array<{
       id: string;
-      kind: string;
+      kind: AiReportKind;
       created_at: string;
       period_start: string;
       period_end: string;
       narrative: { insights?: string[]; hemat?: string[] } | null;
     }>).map((row) => ({
       id: row.id,
-      kind: row.kind as AiReportKind,
+      kind: row.kind,
       createdAt: row.created_at,
       periodStart: row.period_start,
       periodEnd: row.period_end,
