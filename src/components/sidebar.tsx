@@ -9,7 +9,6 @@ import {
   ClipboardList,
   History,
   MessageSquare,
-  ScanLine,
   Settings,
   Sparkles,
   Tags,
@@ -43,8 +42,14 @@ const TX_CHILDREN: TxChild[] = [
   },
 ];
 
-/** Sub-menu AI Center. "AI Scanner" tetap punya view sendiri, sisanya lewat `aiSection`. */
-const AI_CHILDREN: { id: 'scanner' | Exclude<AiSection, 'hub'>; label: string; icon: typeof ScanLine; iconClass: string; tileClass: string }[] = [
+/** Sub-menu AI Center. "AI Scanner" punya view sendiri, sisanya lewat `aiSection`. */
+const AI_CHILDREN: {
+  id: 'scanner' | Exclude<AiSection, 'hub'>;
+  label: string;
+  icon: typeof ClipboardList;
+  iconClass: string;
+  tileClass: string;
+}[] = [
   { id: 'scanner', label: 'AI Scanner', icon: ClipboardList, iconClass: 'text-amber-300', tileClass: 'bg-amber-500/15' },
   { id: 'kategorisasi', label: 'Kategorisasi Otomatis', icon: Tags, iconClass: 'text-emerald-300', tileClass: 'bg-emerald-500/15' },
   { id: 'asisten', label: 'Asisten Keuangan AI', icon: MessageSquare, iconClass: 'text-violet-300', tileClass: 'bg-violet-500/15' },
@@ -74,7 +79,7 @@ export function Sidebar({
   txSection: TransactionSection;
   aiSection: AiSection;
   onNavigate: (v: View, section?: TransactionSection) => void;
-  onNavigateAi: (section: AiSection | 'scanner') => void;
+  onNavigateAi: (section: AiSection) => void;
   connected: boolean;
   usingDemo: boolean;
   userEmail: string;
@@ -101,7 +106,7 @@ export function Sidebar({
           <p className="truncate font-display text-[17px] font-extrabold leading-tight tracking-tight text-white">
             Hepeng History
           </p>
-          <p className="text-[11px] font-medium text-muted-foreground">Personal Finance Tracker</p>
+          <p className="text-[11px] font-medium text-muted-foreground">Pantau Duit & Pengeluaran Harianmu</p>
         </div>
       </div>
 
