@@ -2,6 +2,7 @@ import { ClipboardList, History, MessageSquare, Sparkles, Tags } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { AiSection } from '@/app/views';
+import { AiRiwayatView } from '@/app/ai-riwayat-view';
 import { cn } from '@/lib/utils';
 
 type SubSection = Exclude<AiSection, 'hub'>;
@@ -26,10 +27,10 @@ const SUB_ITEMS: { id: SubSection; title: string; desc: string; icon: typeof Spa
   {
     id: 'riwayat',
     title: 'Riwayat AI',
-    desc: 'Melihat hasil insight AI yang pernah dibuat dan riwayat percakapan.',
+    desc: 'Melihat hasil insight AI yang pernah dibuat, lengkap dengan periodenya.',
     icon: History,
     tone: 'bg-sky-500/15 text-sky-300',
-    aktif: false,
+    aktif: true,
   },
 ];
 
@@ -116,23 +117,24 @@ export function AiCenterView({
     );
   }
 
-  // asisten dan riwayat belum dibangun: tampilkan status yang jelas, bukan halaman kosong
-  const info =
-    section === 'asisten'
-      ? {
-          title: 'Asisten Keuangan AI',
-          desc: 'Tanya apa saja tentang keuanganmu dan minta saran berdasarkan ringkasan angka bulan ini. Akan hadir di Fase C.',
-        }
-      : {
-          title: 'Riwayat AI',
-          desc: 'Daftar insight AI yang pernah dibuat, lengkap dengan periodenya. Akan hadir setelah fitur insight disimpan.',
-        };
+  if (section === 'riwayat') {
+    return (
+      <div className="space-y-5">
+        {back}
+        <AiRiwayatView />
+      </div>
+    );
+  }
+
+  // asisten belum dibangun (Fase C): tampilkan status yang jelas, bukan halaman kosong
   return (
     <div className="space-y-5">
       {back}
       <Card className="p-5">
-        <h2 className="font-display text-lg font-bold tracking-tight">{info.title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{info.desc}</p>
+        <h2 className="font-display text-lg font-bold tracking-tight">Asisten Keuangan AI</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tanya apa saja tentang keuanganmu dan minta saran berdasarkan ringkasan angka bulan ini. Akan hadir di Fase C.
+        </p>
       </Card>
     </div>
   );
