@@ -1,7 +1,6 @@
 import { supabase } from '../supabase-client';
 import type { MonthlyTrend } from '../types';
 import { shortMonth } from '../format';
-import { toNumber as _unusedGuard } from './shared';
 
 /* ---------- Analisa: laporan satu periode dan insight AI ---------- */
 
