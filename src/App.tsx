@@ -13,7 +13,7 @@ import { WalletDetailView } from '@/app/wallet-detail-view';
 import { BudgetView } from '@/app/budget-view';
 import { AnalisaView } from '@/app/analisa-view';
 import { TransactionsView } from '@/app/transactions-view';
-import { ScannerView } from '@/app/scanner-view';
+import { AiScannerPage } from '@/app/ai-scanner-page';
 import { AiCenterView } from '@/app/ai-center-view';
 import { SettingsView } from '@/app/settings-view';
 import { LoginView, SetPasswordView } from '@/app/login-view';
@@ -201,7 +201,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                   onOpenScanner={() => handleNavigate('scanner')}
                 />
               )}
-              {view === 'scanner' && <ScannerView wallets={data.dompet} onSaved={handleRefresh} />}
+              {view === 'scanner' && <AiScannerPage wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'settings' && <SettingsView onSaved={handleRefresh} />}
             </div>
           </main>
