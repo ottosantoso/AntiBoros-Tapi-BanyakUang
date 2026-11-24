@@ -55,12 +55,23 @@ interface StrukItem extends ScanItem {
   selected: boolean;
 }
 
+/** Hasil pindai yang dilaporkan ke pemilik halaman, untuk dicatat sebagai riwayat. */
+export interface ScanResultReport {
+  kind: ImageType;
+  draft: Record<string, unknown>;
+  jumlahItem: number;
+}
+
 interface Props {
   wallets: Wallet[];
   onSaved: () => void;
+  /** Dipanggil saat hasil pindai muncul dan siap diperiksa. */
+  onResult?: (r: ScanResultReport) => void;
+  /** Dipanggil saat user membatalkan hasil pindai (Batal atau Pindai ulang), sebelum disimpan. */
+  onDiscard?: () => void;
 }
 
-export function ScannerView({ wallets, onSaved }: Props) {
+export function ScannerView({ wallets, onSaved, onResult, onDiscard }: Props) {
   const [phase, setPhase] = useState<Phase>('upload');
   const [imageType, setImageType] = useState<ImageType>('struk');
   const [preview, setPreview] = useState<string | null>(null);
@@ -133,6 +144,12 @@ export function ScannerView({ wallets, onSaved }: Props) {
     setStrukItems([]);
   }
 
+  /** Batalkan hasil yang sedang diperiksa: beri tahu pemilik halaman, lalu kosongkan layar. */
+  function discardAndReset() {
+    onDiscard?.();
+    reset();
+  }
+
   function applyResult(data: ScanResult) {
     setResult(data);
     if (data.imageType === 'struk') {
@@ -151,6 +168,11 @@ export function ScannerView({ wallets, onSaved }: Props) {
       setRows(data.transaksi.length ? data.transaksi : []);
     }
     setPhase('review');
+    onResult?.({
+      kind: data.imageType,
+      draft: data as unknown as Record<string, unknown>,
+      jumlahItem: data.imageType === 'struk' ? (data.items?.length || 1) : data.transaksi.length,
+    });
   }
 
   async function handleScan() {
@@ -445,7 +467,7 @@ export function ScannerView({ wallets, onSaved }: Props) {
               <Check className="h-5 w-5" />
               <span className="text-sm font-semibold">Pindai selesai — periksa & edit sebelum menyimpan.</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={reset} className="gap-2 text-income hover:bg-income/10">
+            <Button variant="ghost" size="sm" onClick={discardAndReset} className="gap-2 text-income hover:bg-income/10">
               <RotateCcw className="h-4 w-4" /> Pindai ulang
             </Button>
           </Card>
@@ -499,7 +521,7 @@ export function ScannerView({ wallets, onSaved }: Props) {
               )}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={reset}>
+              <Button variant="outline" onClick={discardAndReset}>
                 Batal
               </Button>
               <Button
