@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { CalendarRange, CheckCircle2, Lock, Plus, PlusCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -8,7 +8,9 @@ import {
   fetchRencanaList,
   insertRencanaItem,
   updateRencana,
+  updateRencanaItemKelompok,
   type Rencana,
+  type RencanaItem,
   type RencanaJenis,
   type RencanaStatus,
 } from '@/lib/data';
@@ -27,27 +29,40 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { usePagination } from '@/components/pagination-bar';
+import { NumberedPagination } from '@/components/numbered-pagination';
 import { cn } from '@/lib/utils';
 import { formatIDR, formatSignedIDR } from '@/lib/format';
 import { formatRupiahInput, parseRupiahInput } from '@/lib/rupiah-input';
 import {
+  KELOMPOK_LABEL,
   RENCANA_KATEGORI,
   categoryBreakdown,
+  defaultKelompok,
+  kelompokTargets,
   monthKey,
   monthLabel,
   summarizeRencana,
+  type Kelompok,
+  type KelompokRow,
+  type TargetStatus,
 } from '@/lib/rencana-math';
 
-const STATUS_LABEL: Record<RencanaStatus, string> = {
-  draft: 'Draf',
-  aktif: 'Aktif',
-  ditutup: 'Ditutup',
-};
+/** Jumlah item per halaman di tabel item rencana. */
+const ITEM_PAGE_SIZE = 10;
+const KELOMPOK_KEYS = Object.keys(KELOMPOK_LABEL) as Kelompok[];
 
+const STATUS_LABEL: Record<RencanaStatus, string> = { draft: 'Draf', aktif: 'Aktif', ditutup: 'Ditutup' };
 const STATUS_CLASS: Record<RencanaStatus, string> = {
   draft: 'bg-amber-500/15 text-amber-600 dark:text-amber-300',
   aktif: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
   ditutup: 'bg-muted text-muted-foreground',
+};
+const TARGET_BAR: Record<TargetStatus, string> = { aman: 'bg-emerald-500', waspada: 'bg-amber-500', lewat: 'bg-rose-500' };
+const TARGET_TEXT: Record<TargetStatus, string> = {
+  aman: 'text-emerald-600 dark:text-emerald-300',
+  waspada: 'text-amber-600 dark:text-amber-300',
+  lewat: 'text-rose-600 dark:text-rose-300',
 };
 
 export function RencanaView() {
@@ -72,7 +87,7 @@ export function RencanaView() {
 
   const selected = useMemo(() => list.find((r) => r.id === selectedId) ?? null, [list, selectedId]);
 
-  async function handleCreate(input: { bulan: string; nama: string; budget: number }) {
+  async function handleCreate(input: { bulan: string; nama: string }) {
     setBusy(true);
     const res = await createRencana(input);
     setBusy(false);
@@ -118,20 +133,20 @@ export function RencanaView() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
-            <CalendarRange className="h-6 w-6" />
+    <div className="space-y-4 sm:space-y-5">
+      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary sm:h-12 sm:w-12">
+            <CalendarRange className="h-5 w-5 sm:h-6 sm:w-6" />
           </span>
-          <div>
-            <h1 className="font-display text-xl font-extrabold tracking-tight md:text-2xl">Rencana Bulanan</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Susun rencana pemasukan dan pengeluaran bulanan. Rencana tidak mengubah saldo atau transaksi.
+          <div className="min-w-0">
+            <h1 className="font-display text-lg font-extrabold tracking-tight sm:text-xl md:text-2xl">Rencana Bulanan</h1>
+            <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+              Susun pemasukan dan pengeluaran bulanan. Rencana tidak mengubah saldo atau transaksi.
             </p>
           </div>
         </div>
-        <Button onClick={() => setCreateOpen(true)} className="h-10 gap-2 rounded-full px-4 font-bold">
+        <Button onClick={() => setCreateOpen(true)} className="h-10 w-full gap-2 rounded-full px-4 font-bold md:w-auto">
           <Plus className="h-4 w-4" /> Rencana Baru
         </Button>
       </div>
@@ -140,7 +155,7 @@ export function RencanaView() {
         <EmptyPlan onCreate={() => setCreateOpen(true)} />
       ) : (
         <>
-          <div className="flex flex-wrap gap-2" role="tablist" aria-label="Pilih bulan">
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="tablist" aria-label="Pilih bulan">
             {list.map((r) => (
               <button
                 key={r.id}
@@ -149,7 +164,7 @@ export function RencanaView() {
                 aria-selected={r.id === selectedId}
                 onClick={() => setSelectedId(r.id)}
                 className={cn(
-                  'rounded-full border px-4 py-2 text-xs font-extrabold transition',
+                  'shrink-0 rounded-full border px-4 py-2 text-xs font-extrabold transition',
                   r.id === selectedId ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card hover:bg-accent/40',
                 )}
               >
@@ -194,11 +209,11 @@ export function RencanaView() {
 
 function EmptyPlan({ onCreate }: { onCreate: () => void }) {
   return (
-    <Card className="flex flex-col items-center justify-center rounded-2xl p-10 text-center">
+    <Card className="flex flex-col items-center justify-center rounded-2xl p-8 text-center sm:p-10">
       <CalendarRange className="h-10 w-10 text-muted-foreground" />
       <h2 className="mt-4 font-display text-lg font-extrabold">Belum ada rencana</h2>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-        Mulai dengan membuat rencana untuk bulan ini, lalu catat pengeluaran yang Anda rencanakan.
+        Mulai dengan membuat rencana untuk bulan ini, lalu isi pemasukan dan pengeluaran yang direncanakan.
       </p>
       <Button onClick={onCreate} className="mt-5 gap-2 rounded-full font-bold">
         <Plus className="h-4 w-4" /> Buat rencana bulan ini
@@ -222,17 +237,18 @@ function PlanDetail({
   onChanged: () => void;
   setBusy: (value: boolean) => void;
 }) {
-  const summary = summarizeRencana(rencana.budget, rencana.items);
+  const summary = summarizeRencana(rencana.items);
+  const targets = kelompokTargets(summary.pemasukan, rencana.items);
   const breakdown = categoryBreakdown(rencana.items);
   const editable = rencana.status !== 'ditutup';
   const maxBreakdown = breakdown[0]?.total ?? 0;
 
   return (
-    <div className="space-y-5">
-      <Card className="flex flex-col gap-3 rounded-2xl p-5 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
-          <h2 className="font-display text-lg font-extrabold">{rencana.nama}</h2>
-          <span className={cn('rounded-full px-2.5 py-1 text-[11px] font-extrabold', STATUS_CLASS[rencana.status])}>
+    <div className="space-y-4 sm:space-y-5">
+      <Card className="flex flex-col gap-3 rounded-2xl p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <h2 className="truncate font-display text-base font-extrabold sm:text-lg">{rencana.nama}</h2>
+          <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold', STATUS_CLASS[rencana.status])}>
             {STATUS_LABEL[rencana.status]}
           </span>
         </div>
@@ -253,26 +269,24 @@ function PlanDetail({
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <Stat label="Budget rencana" value={formatIDR(summary.budget)} />
-        <Stat label="Pemasukan rencana" value={formatIDR(summary.pemasukan)} tone="income" />
-        <Stat label="Pengeluaran rencana" value={formatIDR(summary.pengeluaran)} tone="expense" />
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+        <Stat label="Pemasukan" value={formatIDR(summary.pemasukan)} tone="income" hint="Total item pemasukan" />
+        <Stat label="Pengeluaran" value={formatIDR(summary.pengeluaran)} tone="expense" hint="Total item pengeluaran" />
         <Stat
-          label="Selisih budget"
-          value={`${summary.selisihBudget < 0 ? '-' : '+'} ${formatIDR(Math.abs(summary.selisihBudget))}`}
-          tone={summary.selisihBudget < 0 ? 'expense' : 'income'}
-          hint={summary.selisihBudget < 0 ? 'Melebihi budget' : 'Masih di bawah budget'}
+          label="Tabungan"
+          value={formatSignedIDR(summary.tabungan)}
+          tone={summary.tabungan < 0 ? 'expense' : 'income'}
+          hint={summary.tabungan < 0 ? 'Defisit, pengeluaran melebihi pemasukan' : 'Pemasukan dikurangi pengeluaran'}
         />
+        <Stat label="Budget" value={formatIDR(summary.budget)} hint="Sama dengan total pemasukan" />
       </div>
-      <p className="-mt-2 text-xs text-muted-foreground">
-        Sisa rencana (pemasukan dikurangi pengeluaran): <span className="font-bold">{formatSignedIDR(summary.sisaRencana)}</span>
-        {summary.sisaRencana < 0 && ' — pengeluaran rencana lebih besar dari pemasukan.'}
-      </p>
 
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
+      <TargetCard pemasukan={summary.pemasukan} targets={targets} />
+
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.25fr_1fr]">
         <ItemsCard rencana={rencana} editable={editable} busy={busy} onChanged={onChanged} setBusy={setBusy} />
 
-        <Card className="rounded-2xl p-5">
+        <Card className="rounded-2xl p-4 sm:p-5">
           <h3 className="font-display text-base font-extrabold">Pengeluaran per kategori</h3>
           <p className="text-xs text-muted-foreground">Lihat kategori terbesar untuk menentukan biaya yang bisa dikurangi.</p>
           {breakdown.length === 0 ? (
@@ -283,7 +297,7 @@ function PlanDetail({
                 <li key={row.kategori}>
                   <div className="flex items-center justify-between gap-3 text-xs">
                     <span className="truncate font-bold">{row.kategori}</span>
-                    <span className="font-extrabold tabular-nums">{formatIDR(row.total)}</span>
+                    <span className="shrink-0 font-extrabold tabular-nums">{formatIDR(row.total)}</span>
                   </div>
                   <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
                     <div className="h-full rounded-full bg-primary" style={{ width: `${maxBreakdown ? (row.total / maxBreakdown) * 100 : 0}%` }} />
@@ -295,6 +309,47 @@ function PlanDetail({
         </Card>
       </div>
     </div>
+  );
+}
+
+function TargetCard({ pemasukan, targets }: { pemasukan: number; targets: KelompokRow[] }) {
+  return (
+    <Card className="rounded-2xl p-4 sm:p-5">
+      <h3 className="font-display text-base font-extrabold">Target 50/30/20</h3>
+      <p className="text-xs text-muted-foreground">Dihitung dari total pemasukan {formatIDR(pemasukan)}.</p>
+      {pemasukan === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">Isi pemasukan dulu untuk melihat target tiap kelompok.</p>
+      ) : (
+        <ul className="mt-4 space-y-4">
+          {targets.map((row) => (
+            <li key={row.kelompok}>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <span className="text-sm font-extrabold">
+                  {row.label} <span className="text-xs font-semibold text-muted-foreground">{row.persen}%</span>
+                </span>
+                <span className={cn('text-xs font-extrabold tabular-nums', TARGET_TEXT[row.status])}>
+                  {Number.isFinite(row.ratio) ? `${Math.round(row.ratio * 100)}%` : 'Tanpa target'}
+                </span>
+              </div>
+              <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn('h-full rounded-full transition-all', TARGET_BAR[row.status])}
+                  style={{ width: `${Math.min(Number.isFinite(row.ratio) ? row.ratio : 1, 1) * 100}%` }}
+                />
+              </div>
+              <div className="mt-1.5 flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+                <span>
+                  Terpakai {formatIDR(row.realisasi)} dari {formatIDR(row.target)}
+                </span>
+                <span className={cn('font-bold', row.sisa < 0 && 'text-rose-600 dark:text-rose-300')}>
+                  {row.sisa >= 0 ? `Sisa ${formatIDR(row.sisa)}` : `Lewat ${formatIDR(-row.sisa)}`}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
@@ -315,7 +370,24 @@ function ItemsCard({
   const [nama, setNama] = useState('');
   const [nominal, setNominal] = useState('');
   const [kategori, setKategori] = useState<string>(RENCANA_KATEGORI[0]);
+  const [kelompok, setKelompok] = useState<Kelompok>(defaultKelompok(RENCANA_KATEGORI[0]));
   const [error, setError] = useState<string | null>(null);
+
+  // Urutan: pengeluaran dulu, lalu pemasukan. Dibagi per halaman.
+  const ordered = useMemo(
+    () => [...rencana.items.filter((i) => i.jenis === 'pengeluaran'), ...rencana.items.filter((i) => i.jenis === 'pemasukan')],
+    [rencana.items],
+  );
+  const pager = usePagination(ordered, ITEM_PAGE_SIZE, rencana.id);
+  const totals = {
+    pengeluaran: rencana.items.filter((i) => i.jenis === 'pengeluaran').reduce((s, i) => s + i.nominal, 0),
+    pemasukan: rencana.items.filter((i) => i.jenis === 'pemasukan').reduce((s, i) => s + i.nominal, 0),
+  };
+
+  function pickKategori(value: string) {
+    setKategori(value);
+    setKelompok(defaultKelompok(value));
+  }
 
   async function addItem() {
     // Nominal boleh kosong atau 0 (misalnya item yang belum tahu jumlahnya). Total menghitung 0.
@@ -324,7 +396,13 @@ function ItemsCard({
     if (!Number.isFinite(value) || value < 0) return setError('Nominal tidak valid.');
     setError(null);
     setBusy(true);
-    const res = await insertRencanaItem(rencana.id, { jenis, nama: nama.trim(), nominal: Math.round(value), kategori });
+    const res = await insertRencanaItem(rencana.id, {
+      jenis,
+      nama: nama.trim(),
+      nominal: Math.round(value),
+      kategori,
+      kelompok,
+    });
     setBusy(false);
     if (!res.success) return toast.error('Gagal menambah item', { description: res.error ?? undefined });
     setNama('');
@@ -340,15 +418,20 @@ function ItemsCard({
     onChanged();
   }
 
-  const expenses = rencana.items.filter((i) => i.jenis === 'pengeluaran');
-  const incomes = rencana.items.filter((i) => i.jenis === 'pemasukan');
+  async function changeKelompok(id: string, value: Kelompok) {
+    setBusy(true);
+    const res = await updateRencanaItemKelompok(id, value);
+    setBusy(false);
+    if (!res.success) return toast.error('Gagal mengubah kelompok', { description: res.error ?? undefined });
+    onChanged();
+  }
 
   return (
-    <Card className="rounded-2xl p-5">
+    <Card className="rounded-2xl p-4 sm:p-5">
       <h3 className="font-display text-base font-extrabold">Item rencana</h3>
 
       {editable ? (
-        <div className="mt-4 space-y-3 rounded-xl border border-border bg-muted/40 p-3">
+        <div className="mt-4 space-y-3 rounded-xl border border-border bg-muted/40 p-3 sm:p-4">
           <div className="inline-flex rounded-full bg-background p-1">
             {(['pengeluaran', 'pemasukan'] as RencanaJenis[]).map((value) => (
               <button
@@ -364,24 +447,27 @@ function ItemsCard({
               </button>
             ))}
           </div>
-          <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
-            <Input aria-label="Nama item" placeholder="Nama, misal: Makan di luar" value={nama} onChange={(e) => setNama(e.target.value)} />
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Input aria-label="Nama item" placeholder="Nama, misal: Kosan" value={nama} onChange={(e) => setNama(e.target.value)} className="sm:col-span-2" />
             <Input aria-label="Nominal (opsional)" inputMode="numeric" placeholder="Rp 0 (opsional)" value={formatRupiahInput(nominal)} onChange={(e) => setNominal(parseRupiahInput(e.target.value))} />
+            {jenis === 'pengeluaran' && (
+              <select aria-label="Kategori" value={kategori} onChange={(e) => pickKategori(e.target.value)} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm">
+                {RENCANA_KATEGORI.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            )}
+            {jenis === 'pengeluaran' && (
+              <select aria-label="Kelompok 50/30/20" value={kelompok} onChange={(e) => setKelompok(e.target.value as Kelompok)} className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm">
+                {KELOMPOK_KEYS.map((key) => (
+                  <option key={key} value={key}>{KELOMPOK_LABEL[key]}</option>
+                ))}
+              </select>
+            )}
           </div>
-          {jenis === 'pengeluaran' && (
-            <select
-              aria-label="Kategori"
-              value={kategori}
-              onChange={(e) => setKategori(e.target.value)}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
-            >
-              {RENCANA_KATEGORI.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          )}
           {error && <p className="text-xs font-bold text-destructive">{error}</p>}
-          <Button size="sm" disabled={busy} onClick={addItem} className="gap-2 rounded-full font-bold">
+          <Button size="sm" disabled={busy} onClick={addItem} className="w-full gap-2 rounded-full font-bold sm:w-auto">
             <PlusCircle className="h-4 w-4" /> Tambah item
           </Button>
         </div>
@@ -391,73 +477,107 @@ function ItemsCard({
         </p>
       )}
 
-      <ItemGroup title="Pengeluaran" items={expenses} editable={editable} busy={busy} onRemove={removeItem} />
-      <ItemGroup title="Pemasukan" items={incomes} editable={editable} busy={busy} onRemove={removeItem} />
+      {ordered.length === 0 ? (
+        <p className="mt-6 text-center text-sm text-muted-foreground">Belum ada item. Tambahkan pemasukan dan pengeluaran di atas.</p>
+      ) : (
+        <>
+          <ul className="mt-4 divide-y divide-border">
+            {pager.pageItems.map((item, index) => {
+              const showHeader = index === 0 || pager.pageItems[index - 1].jenis !== item.jenis;
+              const group = item.jenis === 'pengeluaran' ? 'Pengeluaran' : 'Pemasukan';
+              return (
+                <Fragment key={item.id}>
+                  {showHeader && (
+                    <li className="flex items-center justify-between pb-1 pt-3 text-xs font-extrabold uppercase tracking-wide text-muted-foreground first:pt-0">
+                      <span>{group}</span>
+                      <span className="tabular-nums">{formatIDR(item.jenis === 'pengeluaran' ? totals.pengeluaran : totals.pemasukan)}</span>
+                    </li>
+                  )}
+                  <ItemRow item={item} editable={editable} busy={busy} onRemove={removeItem} onKelompok={changeKelompok} />
+                </Fragment>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-center text-[11px] text-muted-foreground">
+            Menampilkan {pager.from}–{pager.to} dari {pager.total} item
+          </p>
+          <NumberedPagination page={pager.page} totalPages={pager.totalPages} onChange={pager.setPage} label="Halaman item rencana" />
+        </>
+      )}
     </Card>
   );
 }
 
-function ItemGroup({
-  title,
-  items,
+function ItemRow({
+  item,
   editable,
   busy,
   onRemove,
+  onKelompok,
 }: {
-  title: string;
-  items: Rencana['items'];
+  item: RencanaItem;
   editable: boolean;
   busy: boolean;
   onRemove: (id: string) => void;
+  onKelompok: (id: string, value: Kelompok) => void;
 }) {
-  if (items.length === 0) return null;
-  const total = items.reduce((sum, i) => sum + i.nominal, 0);
+  const isExpense = item.jenis === 'pengeluaran';
   return (
-    <div className="mt-5">
-      <div className="flex items-center justify-between text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
-        <span>{title}</span>
-        <span className="tabular-nums">{formatIDR(total)}</span>
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3">
+      <div className="min-w-0 flex-1 basis-40">
+        <p className="truncate text-sm font-bold">{item.nama}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{item.kategori ?? (isExpense ? 'Tanpa kategori' : 'Pemasukan')}</p>
       </div>
-      <ul className="mt-2 divide-y divide-border">
-        {items.map((item) => (
-          <li key={item.id} className="flex items-center gap-3 py-2.5">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold">{item.nama}</p>
-              {item.kategori && <p className="truncate text-[11px] text-muted-foreground">{item.kategori}</p>}
-            </div>
-            <span className="shrink-0 text-sm font-extrabold tabular-nums">{formatIDR(item.nominal)}</span>
-            {editable && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => onRemove(item.id)}
-                aria-label={`Hapus ${item.nama}`}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-40"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
+
+      {isExpense && item.kelompok && (
+        editable ? (
+          <select
+            aria-label={`Kelompok ${item.nama}`}
+            value={item.kelompok}
+            disabled={busy}
+            onChange={(e) => onKelompok(item.id, e.target.value as Kelompok)}
+            className="h-8 rounded-full border border-border bg-background px-2.5 text-[11px] font-extrabold disabled:opacity-40"
+          >
+            {KELOMPOK_KEYS.map((key) => (
+              <option key={key} value={key}>{KELOMPOK_LABEL[key]}</option>
+            ))}
+          </select>
+        ) : (
+          <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-extrabold text-muted-foreground">{KELOMPOK_LABEL[item.kelompok]}</span>
+        )
+      )}
+
+      <span className="ml-auto text-sm font-extrabold tabular-nums">{formatIDR(item.nominal)}</span>
+
+      {editable && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onRemove(item.id)}
+          aria-label={`Hapus ${item.nama}`}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-40"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
+    </li>
   );
 }
 
 function Stat({ label, value, tone, hint }: { label: string; value: string; tone?: 'income' | 'expense'; hint?: string }) {
   return (
-    <Card className="rounded-2xl p-4">
-      <p className="text-xs font-bold text-muted-foreground">{label}</p>
+    <Card className="rounded-2xl p-3 sm:p-4">
+      <p className="text-[11px] font-bold text-muted-foreground sm:text-xs">{label}</p>
       <p
         className={cn(
-          'mt-1 font-display text-[20px] font-extrabold tabular-nums md:text-[22px]',
+          'mt-1 font-display text-[15px] font-extrabold tabular-nums sm:text-xl md:text-[22px]',
           tone === 'income' && 'text-emerald-600 dark:text-emerald-300',
           tone === 'expense' && 'text-rose-600 dark:text-rose-300',
         )}
       >
         {value}
       </p>
-      {hint && <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-1 text-[10px] font-semibold leading-snug text-muted-foreground sm:text-[11px]">{hint}</p>}
     </Card>
   );
 }
@@ -470,31 +590,27 @@ function CreatePlanDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (input: { bulan: string; nama: string; budget: number }) => Promise<boolean>;
+  onSubmit: (input: { bulan: string; nama: string }) => Promise<boolean>;
   busy: boolean;
 }) {
   const [month, setMonth] = useState(monthKey().slice(0, 7));
   const [nama, setNama] = useState('');
-  const [budget, setBudget] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
     if (!/^\d{4}-\d{2}$/.test(month)) return setError('Pilih bulan terlebih dahulu.');
-    const value = budget === '' ? 0 : Number(budget);
-    if (!Number.isFinite(value) || value < 0) return setError('Budget tidak boleh negatif.');
     setError(null);
     const bulan = `${month}-01`;
-    const ok = await onSubmit({ bulan, nama: nama.trim() || monthLabel(bulan), budget: Math.round(value) });
+    const ok = await onSubmit({ bulan, nama: nama.trim() || monthLabel(bulan) });
     if (ok) {
       setNama('');
-      setBudget('');
       onOpenChange(false);
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="w-[calc(100%-2rem)] max-w-md">
         <DialogHeader>
           <DialogTitle>Rencana baru</DialogTitle>
         </DialogHeader>
@@ -507,13 +623,9 @@ function CreatePlanDialog({
             Nama rencana (opsional)
             <Input value={nama} onChange={(e) => setNama(e.target.value)} placeholder="Misal: Rencana hemat" />
           </label>
-          <label className="block space-y-1.5 text-xs font-bold">
-            Budget pengeluaran bulan ini
-            <Input inputMode="numeric" value={formatRupiahInput(budget)} onChange={(e) => setBudget(parseRupiahInput(e.target.value))} placeholder="Rp 0" />
-          </label>
           {error && <p className="text-xs font-bold text-destructive">{error}</p>}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Batal</Button>
           <Button disabled={busy} onClick={submit}>Simpan sebagai draf</Button>
         </DialogFooter>
