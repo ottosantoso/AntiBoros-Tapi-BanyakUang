@@ -1,23 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, FileSearch2, Filter, ListFilter, PlusCircle, Search, Sparkles, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChevronDown, Download, FileSearch2, ListFilter, PlusCircle, Search, SlidersHorizontal, WalletCards, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { DashboardData, Transaction, TransactionType, WalletTransfer } from '@/lib/types';
+import type { DashboardData, Transaction, WalletTransfer } from '@/lib/types';
 import type { TransactionSection } from '@/app/views';
 import { AddTransactionSheet, type SheetTab, type TxActions } from '@/components/add-transaction-sheet';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { GRID_COLS_WITH_ACTIONS, TransactionList } from '@/components/transaction-list';
+import { TransactionTable } from '@/components/transaction-table';
+import { PaginationBar, usePagination } from '@/components/pagination-bar';
 import { cn } from '@/lib/utils';
 import { formatIDR } from '@/lib/format';
-import { PaginationBar, usePagination } from '@/components/pagination-bar';
+import {
+  balanceAfterEach,
+  buildTransactionsCsv,
+  dailySeries,
+  exportFileName,
+  isTransfer,
+  matchesJenis,
+  parseNominal,
+  txEffect,
+  type JenisFilter,
+} from '@/lib/transaction-view';
 
-type TypeFilter = 'all' | TransactionType;
-
-/** Jumlah baris per halaman di tabel Riwayat Transaksi dan daftar Transfer. */
-const TX_PAGE_SIZE = 50;
-const TRANSFER_PAGE_SIZE = 20;
+/** Jumlah baris per halaman. Pilihannya ditampilkan di bawah tabel. */
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /** Jeda sebelum penghapusan benar-benar dikirim ke database; selama itu bisa diurungkan. */
 const UNDO_MS = 8000;
@@ -43,12 +51,19 @@ const SECTION_ACTIONS: Record<TransactionSection, { tab: SheetTab; label: string
   transfer: [{ tab: 'Transfer', label: 'Catat Transfer', className: 'bg-violet-500 hover:bg-violet-600' }],
 };
 
-const SECTION_TITLE: Record<TransactionSection, string> = {
-  all: 'Semua transaksi',
-  income: 'Riwayat pemasukan',
-  expense: 'Riwayat pengeluaran',
-  transfer: 'Riwayat transfer antar-dompet',
+const SECTION_HEADER: Record<TransactionSection, { title: string; subtitle: string }> = {
+  all: { title: 'Semua Transaksi', subtitle: 'Lihat dan kelola seluruh transaksi keuangan Anda dengan mudah.' },
+  income: { title: 'Pemasukan', subtitle: 'Riwayat uang masuk ke semua dompet Anda.' },
+  expense: { title: 'Pengeluaran', subtitle: 'Riwayat uang keluar dari semua dompet Anda.' },
+  transfer: { title: 'Transfer Antar-Dompet', subtitle: 'Pindah saldo antar dompet. Transfer tidak dihitung sebagai pemasukan atau pengeluaran.' },
 };
+
+const JENIS_OPTIONS: { value: JenisFilter; label: string }[] = [
+  { value: 'all', label: 'Semua Jenis' },
+  { value: 'Pemasukan', label: 'Pemasukan' },
+  { value: 'Pengeluaran', label: 'Pengeluaran' },
+  { value: 'Transfer', label: 'Transfer' },
+];
 
 export function TransactionsView({
   data,
@@ -82,56 +97,123 @@ export function TransactionsView({
       pending.clear();
     };
   }, []);
-  const [filter, setFilter] = useState<TypeFilter>('all');
-  const [query, setQuery] = useState('');
+
+  const [jenis, setJenis] = useState<JenisFilter>('all');
+  const [kategori, setKategori] = useState('all');
   const [wallet, setWallet] = useState('all');
+  const [query, setQuery] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [minNominal, setMinNominal] = useState('');
+  const [maxNominal, setMaxNominal] = useState('');
+  const [dateOpen, setDateOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(10);
 
   const allTransactions = useMemo(() => data.transaksi ?? [], [data.transaksi]);
-  // Transaksi yang sedang menunggu penghapusan disembunyikan dari tampilan.
+  // Transaksi yang sedang menunggu penghapusan disembunyikan dari tampilan, tapi tetap dihitung untuk saldo.
   const transactions = useMemo(
     () => allTransactions.filter((t) => !t.id || !hiddenIds.has(t.id)),
     [allTransactions, hiddenIds],
   );
-  const wallets = useMemo(() => Array.from(new Set(transactions.map((transaction) => transaction.dompet))).filter(Boolean), [transactions]);
-  const activeAdvancedFilters = [wallet !== 'all', Boolean(fromDate), Boolean(toDate)].filter(Boolean).length;
+  const balances = useMemo(() => balanceAfterEach(allTransactions, data.dompet), [allTransactions, data.dompet]);
+  const walletNames = useMemo(
+    () => Array.from(new Set(allTransactions.map((t) => t.dompet))).filter(Boolean).sort(),
+    [allTransactions],
+  );
+  const categoryNames = useMemo(
+    () => Array.from(new Set(allTransactions.filter((t) => !isTransfer(t) && t.kategori).map((t) => t.kategori as string))).sort(),
+    [allTransactions],
+  );
 
-  // Di submenu Pemasukan/Pengeluaran, jenis sudah ditentukan oleh menu, jadi pill filter jenis tidak dipakai.
-  const typeFilter: TypeFilter =
-    txSection === 'income' ? 'Pemasukan' : txSection === 'expense' ? 'Pengeluaran' : filter;
+  // Di submenu Pemasukan/Pengeluaran, jenis sudah ditentukan oleh menu.
+  const effectiveJenis: JenisFilter =
+    txSection === 'income' ? 'Pemasukan' : txSection === 'expense' ? 'Pengeluaran' : jenis;
+  const minValue = parseNominal(minNominal);
+  const maxValue = parseNominal(maxNominal);
 
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase();
-    return transactions.filter((transaction) => {
-      if (typeFilter !== 'all' && transaction.tipe !== typeFilter) return false;
-      if (wallet !== 'all' && transaction.dompet !== wallet) return false;
-      if (fromDate && transaction.tanggal < fromDate) return false;
-      if (toDate && transaction.tanggal > toDate) return false;
-      if (search && !`${transaction.deskripsi} ${transaction.kategori ?? ''}`.toLowerCase().includes(search)) return false;
+    return transactions.filter((tx) => {
+      if (!matchesJenis(tx, effectiveJenis)) return false;
+      if (kategori !== 'all' && tx.kategori !== kategori) return false;
+      if (wallet !== 'all' && tx.dompet !== wallet) return false;
+      if (fromDate && tx.tanggal < fromDate) return false;
+      if (toDate && tx.tanggal > toDate) return false;
+      if (minValue !== null && tx.nominal < minValue) return false;
+      if (maxValue !== null && tx.nominal > maxValue) return false;
+      if (search && !`${tx.deskripsi} ${tx.kategori ?? ''} ${tx.dompet}`.toLowerCase().includes(search)) return false;
       return true;
     });
-  }, [typeFilter, fromDate, query, toDate, transactions, wallet]);
+  }, [effectiveJenis, fromDate, kategori, maxValue, minValue, query, toDate, transactions, wallet]);
 
-  // Halaman kembali ke 1 setiap filter berubah.
-  const filterKey = [typeFilter, wallet, fromDate, toDate, query].join('|');
-  const tablePage = usePagination(filtered, TX_PAGE_SIZE, filterKey);
+  // Ringkasan mengikuti filter yang aktif. Transfer dipisah: sisi keluar dihitung sebagai total transfer,
+  // dan tidak pernah masuk pemasukan atau pengeluaran riil.
+  const summary = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    let transfer = 0;
+    let incomeCount = 0;
+    let expenseCount = 0;
+    let transferCount = 0;
+    for (const tx of filtered) {
+      if (isTransfer(tx)) {
+        if (tx.tipe === 'Pengeluaran') {
+          transfer += tx.nominal;
+          transferCount += 1;
+        }
+        continue;
+      }
+      if (tx.tipe === 'Pemasukan') {
+        income += tx.nominal;
+        incomeCount += 1;
+      } else {
+        expense += tx.nominal;
+        expenseCount += 1;
+      }
+    }
+    return { income, expense, net: income - expense, transfer, incomeCount, expenseCount, transferCount };
+  }, [filtered]);
 
-  const incomeTotal = transactions.filter((transaction) => transaction.tipe === 'Pemasukan').reduce((sum, transaction) => sum + transaction.nominal, 0);
-  const expenseTotal = transactions.filter((transaction) => transaction.tipe === 'Pengeluaran').reduce((sum, transaction) => sum + transaction.nominal, 0);
-  const netTotal = incomeTotal - expenseTotal;
+  const series = useMemo(
+    () => ({
+      income: dailySeries(filtered.filter((t) => !isTransfer(t) && t.tipe === 'Pemasukan'), (t) => t.nominal),
+      expense: dailySeries(filtered.filter((t) => !isTransfer(t) && t.tipe === 'Pengeluaran'), (t) => t.nominal),
+      net: dailySeries(filtered.filter((t) => !isTransfer(t)), txEffect),
+      transfer: dailySeries(filtered.filter((t) => isTransfer(t) && t.tipe === 'Pengeluaran'), (t) => t.nominal),
+    }),
+    [filtered],
+  );
+
+  // Halaman kembali ke 1 setiap filter atau jumlah baris per halaman berubah.
+  const filterKey = [effectiveJenis, kategori, wallet, fromDate, toDate, minNominal, maxNominal, query, pageSize].join('|');
+  const tablePage = usePagination(filtered, pageSize, filterKey);
+
+  const activeFilterCount = [
+    effectiveJenis !== 'all' && txSection === 'all',
+    kategori !== 'all',
+    wallet !== 'all',
+    Boolean(fromDate),
+    Boolean(toDate),
+    Boolean(minNominal),
+    Boolean(maxNominal),
+  ].filter(Boolean).length;
+  const hasAnyFilter = activeFilterCount > 0 || Boolean(query);
 
   function clearFilters() {
-    setFilter('all');
-    setQuery('');
+    setJenis('all');
+    setKategori('all');
     setWallet('all');
+    setQuery('');
     setFromDate('');
     setToDate('');
+    setMinNominal('');
+    setMaxNominal('');
   }
 
   const actions = SECTION_ACTIONS[txSection];
   const defaultTab: SheetTab = actions[0].tab;
+  const header = SECTION_HEADER[txSection];
 
   function openCreate(tab: SheetTab) {
     setEditTarget(null);
@@ -183,10 +265,29 @@ export function TransactionsView({
     showTransaction(id);
   }
 
+  function exportCsv() {
+    const blob = new Blob([buildTransactionsCsv(filtered, balances)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = exportFileName();
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-semibold text-muted-foreground">{SECTION_TITLE[txSection]}</p>
+    <div className="space-y-5">
+      {/* Banner halaman */}
+      <div className="flex flex-col gap-4 rounded-2xl border border-[#dbeafe] bg-gradient-to-r from-[#eff6ff] via-white to-[#f8fbff] p-5 shadow-[0_6px_18px_rgba(30,64,175,0.06)] md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-4">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#dbeafe] text-[#2563eb]">
+            <ListFilter className="h-6 w-6" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-extrabold tracking-[-0.03em] text-[#172554] md:text-2xl">{header.title}</h1>
+            <p className="mt-0.5 text-sm font-medium text-[#5b6f99]">{header.subtitle}</p>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2">
           {actions.map((action) => (
             <Button
@@ -199,6 +300,18 @@ export function TransactionsView({
               {action.label}
             </Button>
           ))}
+          {txSection !== 'transfer' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={exportCsv}
+              disabled={loading || filtered.length === 0}
+              className="h-10 gap-2 rounded-full border-[#2563eb] bg-white px-4 font-bold text-[#2563eb] hover:bg-[#eff6ff]"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          )}
         </div>
       </div>
 
@@ -206,47 +319,175 @@ export function TransactionsView({
         <TransferList transfers={transfers} loading={loading} onAdd={() => openCreate('Transfer')} />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <SummaryCard label="Total Pemasukan" value={incomeTotal} icon={ArrowDownLeft} className="border-[#93c5fd] bg-[#e0f2fe]" iconClass="bg-[#bfdbfe] text-[#0284c7]" valueClass="text-[#172554]" loading={loading} />
-            <SummaryCard label="Total Pengeluaran" value={expenseTotal} icon={ArrowUpRight} className="border-[#fecdd3] bg-[#ffe4e6]" iconClass="bg-[#fda4af] text-[#be123c]" valueClass="text-[#172554]" loading={loading} />
-            <SummaryCard label="Selisih Bersih" value={netTotal} icon={ListFilter} className="border-[#a7f3d0] bg-[#dcfce7]" iconClass="bg-[#86efac] text-[#047857]" valueClass={netTotal >= 0 ? 'text-[#047857]' : 'text-[#be123c]'} loading={loading} />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              label="Total Pemasukan"
+              value={summary.income}
+              hint={`${summary.incomeCount} transaksi`}
+              icon={ArrowDownLeft}
+              tone="income"
+              series={series.income}
+              loading={loading}
+            />
+            <StatCard
+              label="Total Pengeluaran"
+              value={summary.expense}
+              hint={`${summary.expenseCount} transaksi`}
+              icon={ArrowUpRight}
+              tone="expense"
+              series={series.expense}
+              loading={loading}
+            />
+            <StatCard
+              label="Saldo Bersih"
+              value={summary.net}
+              hint="Pemasukan dikurangi pengeluaran"
+              icon={ListFilter}
+              tone="net"
+              series={series.net}
+              loading={loading}
+            />
+            <StatCard
+              label="Total Transfer"
+              value={summary.transfer}
+              hint={`${summary.transferCount} transfer`}
+              icon={ArrowLeftRight}
+              tone="transfer"
+              series={series.transfer}
+              loading={loading}
+            />
           </div>
 
           <Card className="rounded-2xl border-[#dbeafe] bg-white p-3 shadow-[0_6px_18px_rgba(30,64,175,0.06)] md:p-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-              {txSection === 'all' && (
-                <div className="flex shrink-0 rounded-full bg-[#eff6ff] p-1">
-                  {(['all', 'Pemasukan', 'Pengeluaran'] as TypeFilter[]).map((item) => (
-                    <button key={item} type="button" onClick={() => setFilter(item)} className={cn('rounded-full px-4 py-2 text-xs font-extrabold transition-all', filter === item ? 'bg-[#2563eb] text-white shadow-[0_5px_12px_rgba(37,99,235,0.2)]' : 'text-[#31548a] hover:bg-white')}>
-                      {item === 'all' ? 'Semua' : item}
-                    </button>
-                  ))}
-                </div>
-              )}
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6b7da4]" />
-                <Input placeholder="Cari deskripsi, kategori..." value={query} onChange={(event) => setQuery(event.target.value)} className="h-10 rounded-full border-[#dbeafe] bg-[#f8fbff] pl-10 text-sm font-medium text-[#172554] placeholder:text-[#7d8eaf]" />
+                <Input
+                  aria-label="Cari transaksi"
+                  placeholder="Cari transaksi (nama, kategori, atau dompet)..."
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="h-10 rounded-full border-[#dbeafe] bg-[#f8fbff] pl-10 pr-10 text-sm font-medium text-[#172554] placeholder:text-[#7d8eaf]"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label="Kosongkan pencarian"
+                    className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#6b7da4] hover:bg-[#eff6ff]"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
-              <button type="button" onClick={() => setAdvancedOpen((open) => !open)} className={cn('inline-flex h-10 items-center justify-center gap-2 rounded-full border px-4 text-xs font-extrabold transition', advancedOpen || activeAdvancedFilters ? 'border-[#93c5fd] bg-[#e0f2fe] text-[#1d4ed8]' : 'border-[#dbeafe] bg-white text-[#172554] hover:bg-[#eff6ff]')}>
-                <Filter className="h-4 w-4" /> Filter {activeAdvancedFilters > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#2563eb] px-1 text-[10px] text-white">{activeAdvancedFilters}</span>}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                {txSection === 'all' && (
+                  <ChipSelect
+                    ariaLabel="Filter jenis"
+                    value={jenis}
+                    onChange={(value) => setJenis(value as JenisFilter)}
+                    active={jenis !== 'all'}
+                    options={JENIS_OPTIONS}
+                  />
+                )}
+                <ChipSelect
+                  ariaLabel="Filter kategori"
+                  value={kategori}
+                  onChange={setKategori}
+                  active={kategori !== 'all'}
+                  options={[{ value: 'all', label: 'Semua Kategori' }, ...categoryNames.map((name) => ({ value: name, label: name }))]}
+                />
+                <ChipSelect
+                  ariaLabel="Filter dompet"
+                  value={wallet}
+                  onChange={setWallet}
+                  active={wallet !== 'all'}
+                  options={[{ value: 'all', label: 'Semua Dompet' }, ...walletNames.map((name) => ({ value: name, label: name }))]}
+                />
+                <button
+                  type="button"
+                  onClick={() => setDateOpen((open) => !open)}
+                  aria-expanded={dateOpen}
+                  className={cn(
+                    'inline-flex h-10 items-center gap-2 rounded-full border px-4 text-xs font-extrabold transition',
+                    dateOpen || fromDate || toDate ? 'border-[#93c5fd] bg-[#e0f2fe] text-[#1d4ed8]' : 'border-[#dbeafe] bg-white text-[#172554] hover:bg-[#eff6ff]',
+                  )}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Rentang Tanggal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMoreOpen((open) => !open)}
+                  aria-expanded={moreOpen}
+                  className={cn(
+                    'inline-flex h-10 items-center gap-2 rounded-full border px-4 text-xs font-extrabold transition',
+                    moreOpen || minNominal || maxNominal ? 'border-[#93c5fd] bg-[#e0f2fe] text-[#1d4ed8]' : 'border-[#dbeafe] bg-white text-[#172554] hover:bg-[#eff6ff]',
+                  )}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Filter Lanjutan
+                </button>
+              </div>
             </div>
-            {advancedOpen && (
-              <div className="mt-3 grid gap-3 border-t border-[#e7eef9] pt-3 md:grid-cols-3">
-                <label className="space-y-1.5 text-xs font-extrabold text-[#31548a]">Dompet<select value={wallet} onChange={(event) => setWallet(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbeafe] bg-[#f8fbff] px-3 text-sm font-bold text-[#172554] outline-none focus:border-[#93c5fd]"> <option value="all">Semua Dompet</option>{wallets.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-                <label className="space-y-1.5 text-xs font-extrabold text-[#31548a]">Dari tanggal<div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#2563eb]" /><input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbeafe] bg-[#f8fbff] pl-9 pr-3 text-sm font-bold text-[#172554] outline-none focus:border-[#93c5fd]" /></div></label>
-                <label className="space-y-1.5 text-xs font-extrabold text-[#31548a]">Sampai tanggal<div className="relative"><CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#2563eb]" /><input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="h-10 w-full rounded-xl border border-[#dbeafe] bg-[#f8fbff] pl-9 pr-3 text-sm font-bold text-[#172554] outline-none focus:border-[#93c5fd]" /></div></label>
+
+            {dateOpen && (
+              <div className="mt-3 grid gap-3 border-t border-[#e7eef9] pt-3 sm:grid-cols-2">
+                <DateField label="Dari tanggal" value={fromDate} onChange={setFromDate} />
+                <DateField label="Sampai tanggal" value={toDate} onChange={setToDate} />
               </div>
             )}
-            {(query || filter !== 'all' || activeAdvancedFilters > 0) && <button type="button" onClick={clearFilters} className="mt-3 inline-flex items-center gap-1 text-xs font-extrabold text-[#2563eb] hover:text-[#1d4ed8]">Hapus semua filter <X className="h-3.5 w-3.5" /></button>}
+            {moreOpen && (
+              <div className="mt-3 grid gap-3 border-t border-[#e7eef9] pt-3 sm:grid-cols-2">
+                <NominalField label="Nominal minimum" value={minNominal} onChange={setMinNominal} />
+                <NominalField label="Nominal maksimum" value={maxNominal} onChange={setMaxNominal} />
+              </div>
+            )}
+            {hasAnyFilter && (
+              <button type="button" onClick={clearFilters} className="mt-3 inline-flex items-center gap-1 text-xs font-extrabold text-[#2563eb] hover:text-[#1d4ed8]">
+                Hapus semua filter ({activeFilterCount + (query ? 1 : 0)}) <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </Card>
 
-          <Card className="overflow-hidden rounded-2xl border-[#dbeafe] bg-white p-5 shadow-[0_6px_18px_rgba(30,64,175,0.06)]">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]"><ListFilter className="h-5 w-5" /></span><div><h2 className="font-display text-base font-extrabold tracking-[-0.02em] text-[#172554]">Riwayat Transaksi</h2><p className="text-xs font-medium text-[#5b6f99]">{loading ? 'Memuat transaksi...' : `${filtered.length} transaksi ditemukan`}</p></div></div>
-              {!loading && filtered.length > 0 && <span className="hidden rounded-full bg-[#eff6ff] px-3 py-1.5 text-xs font-extrabold text-[#2563eb] sm:inline-flex">Terbaru</span>}
+          <Card className="overflow-hidden rounded-2xl border-[#dbeafe] bg-white p-4 shadow-[0_6px_18px_rgba(30,64,175,0.06)] md:p-5">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#dbeafe] text-[#2563eb]">
+                  <ListFilter className="h-5 w-5" />
+                </span>
+                <div>
+                  <h2 className="font-display text-base font-extrabold tracking-[-0.02em] text-[#172554]">Riwayat Transaksi</h2>
+                  <p className="text-xs font-medium text-[#5b6f99]">{loading ? 'Memuat transaksi...' : `${filtered.length} transaksi ditemukan`}</p>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-bold text-[#5b6f99]">
+                Tampilkan per halaman
+                <select
+                  value={pageSize}
+                  onChange={(event) => setPageSize(Number(event.target.value))}
+                  aria-label="Jumlah baris per halaman"
+                  className="h-8 rounded-lg border border-[#dbeafe] bg-white px-2 text-xs font-extrabold text-[#172554] outline-none focus:border-[#93c5fd]"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
+              </label>
             </div>
-            {loading ? <TransactionList transactions={filtered} loading limit={5} /> : filtered.length ? <div className="overflow-x-auto"><div className="min-w-[760px]"><div className={cn('grid gap-3 border-b border-[#dbeafe] pb-2 text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#5b6f99]', GRID_COLS_WITH_ACTIONS)}><span>Tanggal</span><span>Keterangan</span><span>Kategori</span><span className="text-right">Nominal</span><span className="text-right">Aksi</span></div><TransactionList transactions={tablePage.pageItems} onEdit={openEdit} onDelete={handleDelete} /></div></div> : <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => openCreate(defaultTab)} actionLabel={actions[0].label} />}
+
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <Skeleton key={index} className="h-12 w-full rounded-xl" />
+                ))}
+              </div>
+            ) : filtered.length ? (
+              <TransactionTable rows={tablePage.pageItems} balances={balances} onEdit={openEdit} onDelete={handleDelete} />
+            ) : (
+              <EmptyTransactions hasAnyTransactions={transactions.length > 0} onAdd={() => openCreate(defaultTab)} actionLabel={actions[0].label} />
+            )}
+
             {!loading && filtered.length > 0 && (
               <PaginationBar
                 page={tablePage.page}
@@ -285,8 +526,149 @@ export function TransactionsView({
   );
 }
 
+function ChipSelect({
+  value,
+  onChange,
+  options,
+  active,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  active: boolean;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="relative">
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(
+          'h-10 max-w-[200px] appearance-none rounded-full border py-0 pl-4 pr-9 text-xs font-extrabold outline-none transition focus:border-[#93c5fd]',
+          active ? 'border-[#93c5fd] bg-[#e0f2fe] text-[#1d4ed8]' : 'border-[#dbeafe] bg-white text-[#172554] hover:bg-[#eff6ff]',
+        )}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#2563eb]" />
+    </div>
+  );
+}
+
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-1.5 text-xs font-extrabold text-[#31548a]">
+      {label}
+      <div className="relative">
+        <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#2563eb]" />
+        <input
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-10 w-full rounded-xl border border-[#dbeafe] bg-[#f8fbff] pl-9 pr-3 text-sm font-bold text-[#172554] outline-none focus:border-[#93c5fd]"
+        />
+      </div>
+    </label>
+  );
+}
+
+function NominalField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="space-y-1.5 text-xs font-extrabold text-[#31548a]">
+      {label}
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-extrabold text-[#2563eb]">Rp</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="0"
+          className="h-10 w-full rounded-xl border border-[#dbeafe] bg-[#f8fbff] pl-9 pr-3 text-sm font-bold tnum text-[#172554] outline-none focus:border-[#93c5fd]"
+        />
+      </div>
+    </label>
+  );
+}
+
+const TONE_STYLE = {
+  income: { card: 'border-[#bfdbfe] bg-gradient-to-br from-white to-[#eff6ff]', icon: 'bg-[#dbeafe] text-[#2563eb]', stroke: '#2563eb', value: 'text-[#172554]' },
+  expense: { card: 'border-[#fecdd3] bg-gradient-to-br from-white to-[#fff1f2]', icon: 'bg-[#ffe4e6] text-[#e11d48]', stroke: '#e11d48', value: 'text-[#172554]' },
+  net: { card: 'border-[#a7f3d0] bg-gradient-to-br from-white to-[#ecfdf5]', icon: 'bg-[#d1fae5] text-[#059669]', stroke: '#059669', value: 'text-[#047857]' },
+  transfer: { card: 'border-[#ddd6fe] bg-gradient-to-br from-white to-[#f5f3ff]', icon: 'bg-[#ede9fe] text-[#7c3aed]', stroke: '#7c3aed', value: 'text-[#172554]' },
+} as const;
+
+function StatCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  tone,
+  series,
+  loading,
+}: {
+  label: string;
+  value: number;
+  hint: string;
+  icon: typeof ArrowDownLeft;
+  tone: keyof typeof TONE_STYLE;
+  series: number[];
+  loading: boolean;
+}) {
+  const style = TONE_STYLE[tone];
+  const negative = tone === 'net' && value < 0;
+  return (
+    <Card className={cn('relative overflow-hidden rounded-2xl border p-4 shadow-[0_6px_18px_rgba(30,64,175,0.06)]', style.card)}>
+      <div className="flex items-start justify-between gap-2">
+        <span className={cn('grid h-10 w-10 place-items-center rounded-xl', style.icon)}>
+          <Icon className="h-5 w-5" strokeWidth={2.4} />
+        </span>
+        <span className="truncate rounded-full bg-white/70 px-2.5 py-1 text-[11px] font-extrabold text-[#5b6f99]">{hint}</span>
+      </div>
+      <p className="mt-3 text-xs font-bold text-[#172554]">{label}</p>
+      {loading ? (
+        <Skeleton className="mt-1 h-8 w-32" />
+      ) : (
+        <p className={cn('mt-1 font-display text-[22px] font-extrabold tracking-[-0.04em] tnum md:text-[25px]', negative ? 'text-[#be123c]' : style.value)}>
+          {formatIDR(value)}
+        </p>
+      )}
+      <Sparkline values={series} stroke={style.stroke} />
+    </Card>
+  );
+}
+
+/** Grafik garis kecil dari data nyata (kumulatif per tanggal). Tanpa data cukup, tampil garis datar. */
+function Sparkline({ values, stroke }: { values: number[]; stroke: string }) {
+  const width = 120;
+  const height = 36;
+  const points = values.length >= 2 ? values : [0, 0];
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const path = points
+    .map((v, i) => {
+      const x = (i / (points.length - 1)) * width;
+      const y = height - ((v - min) / span) * (height - 4) - 2;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="mt-2 h-9 w-full opacity-70" aria-hidden="true">
+      <path d={path} fill="none" stroke={stroke} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
 function TransferList({ transfers, loading, onAdd }: { transfers: WalletTransfer[]; loading: boolean; onAdd: () => void }) {
-  const transferPage = usePagination(transfers, TRANSFER_PAGE_SIZE, '');
+  const transferPage = usePagination(transfers, 20, '');
   if (loading) {
     return (
       <Card className="rounded-2xl border-[#dbeafe] bg-white p-5">
@@ -348,10 +730,23 @@ function formatTanggal(iso: string): string {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function SummaryCard({ label, value, icon: Icon, className, iconClass, valueClass, loading }: { label: string; value: number; icon: typeof ArrowDownLeft; className: string; iconClass: string; valueClass: string; loading: boolean }) {
-  return <Card className={cn('relative overflow-hidden rounded-2xl border p-4 shadow-[0_6px_18px_rgba(30,64,175,0.06)]', className)}><div className="flex items-start justify-between"><span className={cn('grid h-10 w-10 place-items-center rounded-xl', iconClass)}><Icon className="h-5 w-5" strokeWidth={2.4} /></span><span className="rounded-full bg-white/65 px-2.5 py-1 text-[11px] font-extrabold text-[#2563eb]">+0.0%</span></div><p className="mt-3 text-xs font-bold text-[#172554]">{label}</p>{loading ? <Skeleton className="mt-1 h-8 w-32" /> : <p className={cn('mt-1 font-display text-[25px] font-extrabold tracking-[-0.04em] tnum', valueClass)}>{formatIDR(value)}</p>}<div className="pointer-events-none absolute -bottom-3 right-3 flex items-end gap-1 opacity-20"><span className="h-7 w-3 rounded-t bg-current" /><span className="h-12 w-3 rounded-t bg-current" /><span className="h-16 w-3 rounded-t bg-current" /><span className="h-20 w-3 rounded-t bg-current" /></div></Card>;
-}
-
 function EmptyTransactions({ hasAnyTransactions, onAdd, actionLabel }: { hasAnyTransactions: boolean; onAdd: () => void; actionLabel: string }) {
-  return <div className="flex min-h-[350px] flex-col items-center justify-center rounded-2xl bg-gradient-to-b from-white to-[#f5f9ff] px-5 py-8 text-center"><div className="relative grid h-32 w-40 place-items-center"><div className="absolute h-28 w-36 rounded-[50%] bg-[#e0f2fe]" /><div className="relative grid h-20 w-16 rotate-[-4deg] place-items-center rounded-xl border-4 border-[#93c5fd] bg-white shadow-[7px_8px_0_#bfdbfe]"><FileSearch2 className="h-9 w-9 text-[#2563eb]" /><span className="absolute -right-4 bottom-0 grid h-10 w-10 place-items-center rounded-full bg-[#2563eb] text-white shadow-md"><Search className="h-5 w-5" /></span></div><Sparkles className="absolute left-3 top-2 h-5 w-5 text-[#fbbf24]" /><Sparkles className="absolute right-2 top-8 h-4 w-4 text-[#60a5fa]" /></div><h3 className="mt-4 font-display text-lg font-extrabold tracking-[-0.03em] text-[#172554]">{hasAnyTransactions ? 'Tidak ada transaksi yang cocok' : 'Belum ada transaksi.'}</h3><p className="mt-1 max-w-sm text-sm font-medium text-[#5b6f99]">{hasAnyTransactions ? 'Coba ubah kata kunci atau filter untuk melihat transaksi lain.' : 'Catat transaksi pertamamu untuk mulai mengatur keuangan.'}</p><button type="button" onClick={onAdd} className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] transition hover:bg-[#1d4ed8]"><WalletCards className="h-4 w-4" /> {actionLabel}</button></div>;
+  return (
+    <div className="flex min-h-[300px] flex-col items-center justify-center rounded-2xl bg-gradient-to-b from-white to-[#f5f9ff] px-5 py-8 text-center">
+      <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[#e0f2fe] text-[#2563eb]">
+        <FileSearch2 className="h-8 w-8" />
+      </span>
+      <h3 className="mt-4 font-display text-lg font-extrabold tracking-[-0.03em] text-[#172554]">
+        {hasAnyTransactions ? 'Tidak ada transaksi yang cocok' : 'Belum ada transaksi.'}
+      </h3>
+      <p className="mt-1 max-w-sm text-sm font-medium text-[#5b6f99]">
+        {hasAnyTransactions ? 'Coba ubah kata kunci atau filter untuk melihat transaksi lain.' : 'Catat transaksi pertamamu untuk mulai mengatur keuangan.'}
+      </p>
+      {!hasAnyTransactions && (
+        <button type="button" onClick={onAdd} className="mt-5 inline-flex items-center gap-2 rounded-full bg-[#2563eb] px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_8px_18px_rgba(37,99,235,0.2)] transition hover:bg-[#1d4ed8]">
+          <WalletCards className="h-4 w-4" /> {actionLabel}
+        </button>
+      )}
+    </div>
+  );
 }
