@@ -6,7 +6,7 @@ import { Header } from '@/components/header';
 import { AddWalletSheet } from '@/components/add-wallet-sheet';
 import { useDashboard } from '@/lib/use-dashboard';
 import { thisMonthRange, type DateRangeValue } from '@/lib/date-range';
-import type { View, TransactionSection } from '@/app/views';
+import type { View, TransactionSection, AiSection } from '@/app/views';
 import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
 import { WalletDetailView } from '@/app/wallet-detail-view';
@@ -14,6 +14,7 @@ import { BudgetView } from '@/app/budget-view';
 import { AnalisaView } from '@/app/analisa-view';
 import { TransactionsView } from '@/app/transactions-view';
 import { ScannerView } from '@/app/scanner-view';
+import { AiCenterView } from '@/app/ai-center-view';
 import { SettingsView } from '@/app/settings-view';
 import { LoginView, SetPasswordView } from '@/app/login-view';
 import { supabase, supabaseConfigured } from '@/lib/supabase-client';
@@ -50,6 +51,8 @@ function AuthGate() {
 function Workspace({ userName, userEmail }: { userName: string; userEmail: string }) {
   const [view, setView] = useState<View>('dashboard');
   const [txSection, setTxSection] = useState<TransactionSection>('all');
+  /** Sub-halaman AI Center yang aktif (hub, kategorisasi, asisten, riwayat). */
+  const [aiSection, setAiSection] = useState<AiSection>('hub');
   const [walletSheetOpen, setWalletSheetOpen] = useState(false);
   /** Dompet yang sedang dibuka di halaman detail. Null berarti daftar dompet. */
   const [detailWalletId, setDetailWalletId] = useState<string | null>(null);
@@ -81,6 +84,13 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
     setNavOpen(false);
   }, []);
 
+  const handleNavigateAi = useCallback((section: AiSection) => {
+    setView('ai');
+    setAiSection(section);
+    setDetailWalletId(null);
+    setNavOpen(false);
+  }, []);
+
   // Setelah keluar, useSession mengembalikan pengguna ke halaman masuk.
   const handleSignOut = useCallback(async () => {
     const { error: signOutError } = await supabase.auth.signOut();
@@ -95,7 +105,9 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
         <Sidebar
           view={view}
           txSection={txSection}
+          aiSection={aiSection}
           onNavigate={handleNavigate}
+          onNavigateAi={handleNavigateAi}
           connected={status === 'connected'}
           usingDemo={usingDemo}
           userEmail={userEmail}
@@ -181,6 +193,13 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
               {view === 'budget' && <BudgetView />}
               {view === 'analisa' && (
                 <AnalisaView onGoTransactions={() => handleNavigate('transactions')} syncKey={data} />
+              )}
+              {view === 'ai' && (
+                <AiCenterView
+                  section={aiSection}
+                  onOpen={setAiSection}
+                  onOpenScanner={() => handleNavigate('scanner')}
+                />
               )}
               {view === 'scanner' && <ScannerView wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'settings' && <SettingsView onSaved={handleRefresh} />}
