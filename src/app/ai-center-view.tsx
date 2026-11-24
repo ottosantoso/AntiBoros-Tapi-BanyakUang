@@ -2,6 +2,7 @@ import { ClipboardList, History, MessageSquare, Sparkles, Tags } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { AiSection } from '@/app/views';
+import { AiAsistenView } from '@/app/ai-asisten-view';
 import { AiRiwayatView } from '@/app/ai-riwayat-view';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +23,7 @@ const SUB_ITEMS: { id: SubSection; title: string; desc: string; icon: typeof Spa
     desc: 'Chat dengan AI untuk bertanya tentang kondisi keuangan dan meminta saran.',
     icon: MessageSquare,
     tone: 'bg-violet-500/15 text-violet-300',
-    aktif: false,
+    aktif: true,
   },
   {
     id: 'riwayat',
@@ -117,6 +118,15 @@ export function AiCenterView({
     );
   }
 
+  if (section === 'asisten') {
+    return (
+      <div className="space-y-5">
+        {back}
+        <AiAsistenView />
+      </div>
+    );
+  }
+
   if (section === 'riwayat') {
     return (
       <div className="space-y-5">
@@ -126,18 +136,7 @@ export function AiCenterView({
     );
   }
 
-  // asisten belum dibangun (Fase C): tampilkan status yang jelas, bukan halaman kosong
-  return (
-    <div className="space-y-5">
-      {back}
-      <Card className="p-5">
-        <h2 className="font-display text-lg font-bold tracking-tight">Asisten Keuangan AI</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Tanya apa saja tentang keuanganmu dan minta saran berdasarkan ringkasan angka bulan ini. Akan hadir di Fase C.
-        </p>
-      </Card>
-    </div>
-  );
+  return null;
 }
 
 function HubCard({
