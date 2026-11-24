@@ -8,12 +8,53 @@ export const KELOMPOK_LABEL: Record<Kelompok, string> = {
   investasi: 'Investasi',
 };
 
-/** Aturan 50/30/20: persentase dari total pemasukan rencana. */
-export const KELOMPOK_PERSEN: Record<Kelompok, number> = {
-  kebutuhan: 50,
-  keinginan: 30,
-  investasi: 20,
-};
+/** Persentase dari total pemasukan untuk tiap kelompok. Total harus 100. */
+export interface Persen {
+  kebutuhan: number;
+  keinginan: number;
+  investasi: number;
+}
+
+export type ModelKode = 'standar' | 'cepat-nabung' | 'keluarga' | 'hemat' | 'kustom';
+
+export interface ModelKeuangan {
+  kode: ModelKode;
+  nama: string;
+  persen: Persen;
+  cocok: string;
+}
+
+/** Daftar model yang bisa dipilih. Mengubah daftar ini tidak mengubah rencana lama, karena persentasenya disimpan per rencana. */
+export const MODEL_KEUANGAN: ModelKeuangan[] = [
+  { kode: 'standar', nama: '50/30/20 (standar)', persen: { kebutuhan: 50, keinginan: 30, investasi: 20 }, cocok: 'Pekerja single dengan penghasilan stabil' },
+  { kode: 'cepat-nabung', nama: '40/30/30', persen: { kebutuhan: 40, keinginan: 30, investasi: 30 }, cocok: 'Single yang ingin cepat menabung' },
+  { kode: 'keluarga', nama: '60/20/20', persen: { kebutuhan: 60, keinginan: 20, investasi: 20 }, cocok: 'Sudah berkeluarga, ada tanggungan' },
+  { kode: 'hemat', nama: '70/20/10', persen: { kebutuhan: 70, keinginan: 20, investasi: 10 }, cocok: 'Masih kuliah, atau penghasilan kecil' },
+  { kode: 'kustom', nama: 'Kustom', persen: { kebutuhan: 50, keinginan: 30, investasi: 20 }, cocok: 'Kondisi khusus, harus berjumlah 100%' },
+];
+
+export const MODEL_DEFAULT: ModelKode = 'standar';
+
+export function getModel(kode: ModelKode): ModelKeuangan {
+  return MODEL_KEUANGAN.find((m) => m.kode === kode) ?? MODEL_KEUANGAN[0];
+}
+
+/** Pesan error untuk persentase kustom. Null berarti valid. */
+export function validatePersen(p: Persen): string | null {
+  const values = [p.kebutuhan, p.keinginan, p.investasi];
+  if (values.some((v) => !Number.isInteger(v) || v < 0 || v > 100)) return 'Persentase tiap kelompok harus bilangan bulat 0 sampai 100.';
+  const total = values.reduce((s, v) => s + v, 0);
+  if (total === 100) return null;
+  const selisih = Math.abs(100 - total);
+  return `Total masih ${total}%, ${total < 100 ? 'kurang' : 'lebih'} ${selisih}%`;
+}
+
+export interface RencanaItemLike {
+  jenis: 'pemasukan' | 'pengeluaran';
+  nominal: number;
+  kategori: string | null;
+  kelompok: Kelompok | null;
+}
 
 /** Kelompok awal per kategori. Pengguna bisa mengubahnya per item. */
 const KATEGORI_KELOMPOK: Record<string, Kelompok> = {
@@ -31,13 +72,6 @@ const KATEGORI_KELOMPOK: Record<string, Kelompok> = {
 
 export function defaultKelompok(kategori: string | null): Kelompok {
   return (kategori && KATEGORI_KELOMPOK[kategori]) || 'kebutuhan';
-}
-
-export interface RencanaItemLike {
-  jenis: 'pemasukan' | 'pengeluaran';
-  nominal: number;
-  kategori: string | null;
-  kelompok: Kelompok | null;
 }
 
 export interface RencanaSummary {
@@ -74,21 +108,22 @@ export interface KelompokRow {
   status: TargetStatus;
 }
 
-/** Target 50/30/20 dari total pemasukan, dibandingkan dengan realisasi tiap kelompok. */
-export function kelompokTargets(pemasukan: number, items: RencanaItemLike[]): KelompokRow[] {
+/** Target per kelompok dari total pemasukan, dengan persentase model yang dipilih untuk rencana ini. */
+export function kelompokTargets(pemasukan: number, items: RencanaItemLike[], persen: Persen): KelompokRow[] {
   const realisasi: Record<Kelompok, number> = { kebutuhan: 0, keinginan: 0, investasi: 0 };
   for (const item of items) {
     if (item.jenis !== 'pengeluaran') continue;
     const kelompok = item.kelompok ?? defaultKelompok(item.kategori);
     realisasi[kelompok] += item.nominal;
   }
-  return (Object.keys(KELOMPOK_PERSEN) as Kelompok[]).map((kelompok) => {
-    const persen = KELOMPOK_PERSEN[kelompok];
-    const target = Math.round((pemasukan * persen) / 100);
+  const order: Kelompok[] = ['kebutuhan', 'keinginan', 'investasi'];
+  return order.map((kelompok) => {
+    const persenKelompok = persen[kelompok];
+    const target = Math.round((pemasukan * persenKelompok) / 100);
     const real = realisasi[kelompok];
     const ratio = target > 0 ? real / target : real > 0 ? Number.POSITIVE_INFINITY : 0;
     const status: TargetStatus = ratio >= 1 ? 'lewat' : ratio >= 0.8 ? 'waspada' : 'aman';
-    return { kelompok, label: KELOMPOK_LABEL[kelompok], persen, target, realisasi: real, sisa: target - real, ratio, status };
+    return { kelompok, label: KELOMPOK_LABEL[kelompok], persen: persenKelompok, target, realisasi: real, sisa: target - real, ratio, status };
   });
 }
 
