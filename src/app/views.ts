@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'wallets' | 'budget' | 'analisa' | 'transactions' | 'ai' | 'scanner' | 'settings';
+export type View = 'dashboard' | 'wallets' | 'budget' | 'analisa' | 'rencana' | 'transactions' | 'ai' | 'scanner' | 'settings';
 
 export type TransactionSection = 'all' | 'income' | 'expense' | 'transfer';
 
