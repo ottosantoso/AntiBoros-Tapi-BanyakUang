@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ArrowLeftRight,
+  CalendarRange,
   ChevronDown,
   LayoutDashboard,
   List,
@@ -61,6 +62,7 @@ const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[
   { id: 'wallets', label: 'Dompet', hint: 'Kelola sumber dana', icon: Wallet },
   { id: 'budget', label: 'Budget', hint: 'Batas & target tabungan', icon: PiggyBank },
   { id: 'analisa', label: 'Analisa', hint: 'Tren & aliran dana', icon: BarChart3 },
+  { id: 'rencana', label: 'Rencana', hint: 'Rencana pengeluaran bulanan', icon: CalendarRange },
 ];
 
 export function Sidebar({

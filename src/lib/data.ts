@@ -16,3 +16,4 @@ export * from './data/analisa';
 export * from './data/ai-reports';
 export * from './data/ai-chat';
 export * from './data/scan-batches';
+export * from './data/rencana';
