@@ -14,7 +14,7 @@ export function ModelSelector({
   model: ModelKode;
   persen: Persen;
   disabled: boolean;
-  onSave: (model: ModelKode, persen: Persen) => Promise<void>;
+  onSave: (model: ModelKode, persen: Persen) => Promise<unknown>;
 }) {
   const [kustom, setKustom] = useState<Persen>(persen);
   const [error, setError] = useState<string | null>(null);
