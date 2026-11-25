@@ -1,9 +1,10 @@
-import { ClipboardList, History, MessageSquare, Sparkles, Tags } from 'lucide-react';
+import { ClipboardList, History, HeartPulse, MessageSquare, Sparkles, Tags } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import type { AiSection } from '@/app/views';
 import { AiAsistenView } from '@/app/ai-asisten-view';
 import { AiRiwayatView } from '@/app/ai-riwayat-view';
+import { AiPrediksiView } from '@/app/ai-prediksi-view';
 import { cn } from '@/lib/utils';
 
 type SubSection = Exclude<AiSection, 'hub'>;
@@ -31,6 +32,14 @@ const SUB_ITEMS: { id: SubSection; title: string; desc: string; icon: typeof Spa
     desc: 'Melihat hasil insight AI yang pernah dibuat, lengkap dengan periodenya.',
     icon: History,
     tone: 'bg-sky-500/15 text-sky-300',
+    aktif: true,
+  },
+  {
+    id: 'prediksi',
+    title: 'Prediksi & Kesehatan',
+    desc: 'Estimasi pengeluaran bulan depan dan skor kesehatan keuangan bulan ini.',
+    icon: HeartPulse,
+    tone: 'bg-amber-500/15 text-amber-300',
     aktif: true,
   },
 ];
@@ -132,6 +141,15 @@ export function AiCenterView({
       <div className="space-y-5">
         {back}
         <AiRiwayatView />
+      </div>
+    );
+  }
+
+  if (section === 'prediksi') {
+    return (
+      <div className="space-y-5">
+        {back}
+        <AiPrediksiView />
       </div>
     );
   }
