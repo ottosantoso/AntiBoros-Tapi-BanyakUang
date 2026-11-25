@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChevronDown, Download, FileSearch2, ListFilter, PlusCircle, Search, SlidersHorizontal, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChevronDown, Download, FileSearch2, FileSpreadsheet, FileText, ListFilter, Loader2, PlusCircle, Search, SlidersHorizontal, WalletCards, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DashboardData, Transaction, WalletTransfer } from '@/lib/types';
 import type { TransactionSection } from '@/app/views';
 import { AddTransactionSheet, type SheetTab, type TxActions } from '@/components/add-transaction-sheet';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,11 +13,13 @@ import { TransactionTable } from '@/components/transaction-table';
 import { PaginationBar, usePagination } from '@/components/pagination-bar';
 import { cn } from '@/lib/utils';
 import { formatIDR } from '@/lib/format';
+import { buildLaporanModel } from '@/lib/export/model';
+import { buatExcel } from '@/lib/export/excel';
+import { buatPdf } from '@/lib/export/pdf';
+import { namaFileLaporan, unduhFile } from '@/lib/export/download';
 import {
   balanceAfterEach,
-  buildTransactionsCsv,
   dailySeries,
-  exportFileName,
   isPemasukanRiil,
   isTransfer,
   isPengeluaranRiil,
@@ -104,6 +107,8 @@ export function TransactionsView({
   const [kategori, setKategori] = useState('all');
   const [wallet, setWallet] = useState('all');
   const [query, setQuery] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [minNominal, setMinNominal] = useState('');
@@ -273,14 +278,44 @@ export function TransactionsView({
     showTransaction(id);
   }
 
-  function exportCsv() {
-    const blob = new Blob([buildTransactionsCsv(filtered, balances)], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = exportFileName();
-    link.click();
-    URL.revokeObjectURL(url);
+  /** Keterangan periode dan filter aktif, dipakai di judul laporan. */
+  function labelPeriode(): string {
+    const tgl = (iso: string) => {
+      const [y, m, d] = iso.split('-');
+      return `${d}/${m}/${y}`;
+    };
+    const bagian: string[] = [];
+    if (fromDate && toDate) bagian.push(`${tgl(fromDate)} – ${tgl(toDate)}`);
+    else if (fromDate) bagian.push(`Sejak ${tgl(fromDate)}`);
+    else if (toDate) bagian.push(`Sampai ${tgl(toDate)}`);
+    else bagian.push('Semua tanggal');
+    if (wallet !== 'all') bagian.push(`Dompet: ${wallet}`);
+    if (kategori !== 'all') bagian.push(`Kategori: ${kategori}`);
+    if (effectiveJenis !== 'all') bagian.push(`Jenis: ${effectiveJenis}`);
+    return bagian.join(' · ');
+  }
+
+  async function exportLaporan(format: 'xlsx' | 'pdf') {
+    setExporting(format);
+    try {
+      const model = buildLaporanModel({
+        items: filtered,
+        balances,
+        transfers: transferRows,
+        dompet: data.dompet.map((w) => ({ nama: w.nama, saldo: w.saldo })),
+        totalSaldo: data.totalSaldo,
+        periode: labelPeriode(),
+        dibuat: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+      });
+      const blob = format === 'xlsx' ? await buatExcel(model) : await buatPdf(model);
+      unduhFile(blob, namaFileLaporan(format));
+      setExportOpen(false);
+      toast.success(`Laporan ${format === 'xlsx' ? 'Excel' : 'PDF'} siap diunduh`);
+    } catch (err) {
+      toast.error('Gagal membuat laporan', { description: err instanceof Error ? err.message : 'Coba lagi beberapa saat.' });
+    } finally {
+      setExporting(null);
+    }
   }
 
   return (
@@ -312,7 +347,7 @@ export function TransactionsView({
             <Button
               size="sm"
               variant="outline"
-              onClick={exportCsv}
+              onClick={() => setExportOpen(true)}
               disabled={loading || filtered.length === 0}
               className="h-10 gap-2 rounded-full border-[#2563eb] bg-white px-4 font-bold text-[#2563eb] hover:bg-[#eff6ff]"
             >
@@ -322,6 +357,44 @@ export function TransactionsView({
           )}
         </div>
       </div>
+
+      <Dialog open={exportOpen} onOpenChange={(open) => { if (!exporting) setExportOpen(open); }}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Laporan</DialogTitle>
+            <DialogDescription>
+              Pilih format. Isinya mengikuti filter yang sedang aktif ({filtered.length} transaksi).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => exportLaporan('xlsx')}
+              disabled={exporting !== null}
+              className="flex flex-col items-start gap-2 rounded-2xl border border-[#bbf7d0] bg-[#f0fdf4] p-4 text-left transition hover:bg-[#dcfce7] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#059669] text-white"><FileSpreadsheet className="h-5 w-5" /></span>
+              <span className="font-display text-sm font-extrabold text-[#172554]">Excel (.xlsx)</span>
+              <span className="text-xs font-medium text-[#5b6f99]">Tabel transaksi, ringkasan dengan rumus, dan grafik di sheet terpisah.</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => exportLaporan('pdf')}
+              disabled={exporting !== null}
+              className="flex flex-col items-start gap-2 rounded-2xl border border-[#fecdd3] bg-[#fff1f2] p-4 text-left transition hover:bg-[#ffe4e6] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#e11d48] text-white"><FileText className="h-5 w-5" /></span>
+              <span className="font-display text-sm font-extrabold text-[#172554]">PDF (.pdf)</span>
+              <span className="text-xs font-medium text-[#5b6f99]">Ringkasan, grafik, dompet, dan rincian transaksi siap cetak.</span>
+            </button>
+          </div>
+          {exporting && (
+            <p className="flex items-center gap-2 text-xs font-semibold text-[#2563eb]">
+              <Loader2 className="h-4 w-4 animate-spin" /> Menyiapkan laporan {exporting === 'xlsx' ? 'Excel' : 'PDF'}...
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {txSection === 'transfer' ? (
         <TransferList transfers={transfers} loading={loading} onAdd={() => openCreate('Transfer')} />
