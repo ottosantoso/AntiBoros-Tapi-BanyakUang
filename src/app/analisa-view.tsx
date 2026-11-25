@@ -21,10 +21,11 @@ import {
   Wallet,
 } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalisa } from '@/lib/use-analisa';
-import { fetchAiAnalysis, type AnalisaData } from '@/lib/data';
+import { fetchAiAnalysis, saveAiReport, type AnalisaData } from '@/lib/data';
 import type { MonthlyTrend } from '@/lib/types';
 import { formatIDR } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -328,7 +329,13 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
                 <TrendCard data={d} loading={loading} />
               </div>
               <div className="lg:col-span-2">
-                <InsightCard items={insights} data={d} periodLabel={periodLabel} loading={loading} />
+                <InsightCard
+                  items={insights}
+                  data={d}
+                  periodLabel={periodLabel}
+                  range={range}
+                  loading={loading}
+                />
               </div>
             </div>
 
@@ -655,11 +662,13 @@ function InsightCard({
   items,
   data,
   periodLabel,
+  range,
   loading,
 }: {
   items: string[];
   data: AnalisaData | null;
   periodLabel: string;
+  range: { start: string; end: string };
   loading: boolean;
 }) {
   const [state, setState] = useState<InsightState>({ status: 'idle' });
@@ -677,6 +686,22 @@ function InsightCard({
     if (res.error || !res.data) {
       setState({ status: 'error', message: res.error ?? 'AI belum bisa membuat insight.' });
       return;
+    }
+    // Simpan ke riwayat AI. Kalau gagal, insight tetap tampil di layar.
+    const saved = await saveAiReport({
+      kind: 'analisa',
+      periodStart: range.start,
+      periodEnd: range.end,
+      metrics: {
+        pemasukan: data.pemasukan,
+        pengeluaran: data.pengeluaran,
+        sisaBersih: data.sisaBersih,
+        rasioTabungan: data.rasioTabungan,
+      },
+      narrative: res.data,
+    });
+    if (!saved.success) {
+      toast.warning('Insight tampil, tapi gagal disimpan ke riwayat', { description: saved.error ?? undefined });
     }
     setState({ status: 'ready', insights: res.data.insights, hemat: res.data.hemat });
   };
