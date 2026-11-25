@@ -103,7 +103,7 @@ export function LoginView() {
     });
     setBusy(false);
     if (error) toast.error('Gagal mengirim email', { description: translateAuthError(error.message) });
-    else toast.success('Tautan reset terkirim', { description: 'Cek email Anda untuk membuat password baru.' });
+    else toast.success('Jika email terdaftar, tautan reset sudah dikirim', { description: 'Cek kotak masuk dan folder spam. Pakai email yang sama dengan saat mendaftar.', duration: 10000 });
   }
 
   const loginErr = loginForm.formState.errors;
