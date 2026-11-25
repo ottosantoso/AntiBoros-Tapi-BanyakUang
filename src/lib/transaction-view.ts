@@ -1,5 +1,4 @@
 import type { Transaction } from '@/lib/types';
-import { toISODate } from '@/lib/format';
 
 /** Jenis tampilan satu baris. Penyesuaian = koreksi saldo, tidak dihitung sebagai pemasukan/pengeluaran. */
 export type Jenis = 'Pemasukan' | 'Pengeluaran' | 'Transfer' | 'Penyesuaian';
@@ -100,35 +99,4 @@ export function parseNominal(value: string): number | null {
   if (value.trim() === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function csvCell(value: string | number): string {
-  return `"${String(value).replace(/"/g, '""')}"`;
-}
-
-/** CSV untuk dibuka di Excel. Diberi BOM supaya karakter Indonesia tampil benar. Ekspor .xlsx dengan rumus menyusul. */
-export function buildTransactionsCsv(rows: Transaction[], balances: Map<string, number>): string {
-  const header = ['Tanggal', 'Keterangan', 'Kategori', 'Dompet', 'Jenis', 'Masuk', 'Keluar', 'Saldo Setelah'];
-  const lines = rows.map((tx) => {
-    const jenis = txJenis(tx);
-    const income = tx.tipe === 'Pemasukan';
-    const balance = tx.id ? balances.get(tx.id) : undefined;
-    return [
-      tx.tanggal,
-      tx.deskripsi,
-      isTransfer(tx) ? '' : tx.kategori ?? '',
-      tx.dompet,
-      jenis,
-      income ? tx.nominal : '',
-      income ? '' : tx.nominal,
-      balance ?? '',
-    ]
-      .map(csvCell)
-      .join(',');
-  });
-  return `\uFEFF${[header.map(csvCell).join(','), ...lines].join('\r\n')}`;
-}
-
-export function exportFileName(): string {
-  return `transaksi-${toISODate()}.csv`;
 }
