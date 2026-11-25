@@ -1,140 +1,145 @@
 # CODEBASE_MAP: AntiBoros-Tapi-BanyakUang ("Hepeng History")
 
-Pelacak keuangan pribadi (dompet, transaksi, scanner struk/mutasi dengan AI). UI berbahasa Indonesia.
-Dibuat dari Bolt (`.bolt/`). Terakhir diperbarui setelah Sprint 2 (branch `feat/sprint-2-jalur-data`) di atas `main` commit `7d3c5f3` (PR #5 merge). Riwayat: Sprint 1 (PR #3), tambah dompet (PR #4), menu ubah dompet dan logo (PR #5).
+Pelacak keuangan pribadi: dompet, transaksi, budget, analisa, scanner struk/mutasi, dan AI Center. UI berbahasa Indonesia.
+Diperbarui setelah PR #56 (sub-menu Prediksi di sidebar). Versi sebelumnya sudah tidak sesuai dengan kode dan dihapus.
 
 ## Status verifikasi
-Peta ini diverifikasi per file. Bagian yang belum dibuka tandai "belum diverifikasi" dan jangan dianggap fakta.
-- Sudah dibaca: `package.json`, `README.md`, `index.html`, `vite.config.ts`, `tsconfig.json`, `tsconfig.app.json`, `eslint.config.js`, `.gitignore`, `.bolt/prompt`, `.bolt/ignore`, `src/main.tsx`, `src/App.tsx`, `src/app/*` (semua file app sudah dibaca), `src/components/` (sidebar, header, cashflow-charts, transaction-list, wallet-card, metric-card, add-transaction-sheet, date-range-picker, add-wallet-sheet), `src/lib/` (api, data, use-dashboard, supabase-client, types, date-range, format, theme, wallets, wallet-providers, demo-data), ketiga migrasi SQL di `main` dan keempat migrasi di `feat/tambah-dompet`.
-- Belum dibaca: `src/components/ui/*` (shadcn), `src/hooks/use-toast.ts`, `src/lib/utils.ts`, `src/components/logo.tsx`, `theme-toggle.tsx`, `src/App.css`, `src/index.css`, `tailwind.config.js`, `components.json`, `tsconfig.node.json`, `postcss.config.js`, `vite-env.d.ts`, `package-lock.json`, `.bolt/config.json`.
+- Bagian "Struktur" dan "Alur data" ditulis dari kode yang saya baca dan ubah langsung selama pengerjaan. Dianggap akurat.
+- Bagian "Belum diverifikasi" di akhir file adalah daftar file yang belum saya buka. Jangan dianggap fakta.
+- Sebelum mengubah file yang tercantum di sini, baca versi terbaru dari `main`. Ada beberapa kali file ditulis ulang dari salinan lama dan menghilangkan perubahan PR lain.
 
 ## Stack
-- Vite 5 + React 18 + TypeScript (strict), Tailwind CSS 3 + shadcn/ui (Radix), ikon `lucide-react`
-- Data: Supabase (`@supabase/supabase-js`), polling 30 detik. Chart: `recharts`. Tanggal: `date-fns`
-- Dependensi terpasang tapi belum terverifikasi dipakai: `react-hook-form`, `zod`, `@hookform/resolvers` (kemungkinan dipakai di `ui/form.tsx`, belum diverifikasi), `react-dropzone` dipakai di `scanner-view.tsx`
+- Vite + React 18 + TypeScript, Tailwind CSS 3, shadcn/ui (Radix), `lucide-react`, `recharts`, `date-fns`, `react-dropzone`, `sonner` (notifikasi)
+- Backend: Supabase (Postgres + RLS, Auth, Storage bucket `wallet-logos`, Edge Functions)
+- AI: Google Gemini, dipanggil hanya dari Edge Function. Kunci ada di Supabase Secrets (`GEMINI_API_KEY`).
 - Alias import: `@/` = `src/`
-- ESLint flat config dengan `react-hooks` dan `react-refresh`. `noUnusedLocals` dimatikan di `tsconfig.app.json`.
 
 ## Perintah
-- `npm run dev` | `npm run build` (`tsc -b && vite build`) | `npm run lint` | `npm run typecheck` (`tsc --noEmit -p tsconfig.app.json`)
-- Env wajib (tidak ada `.env` di repo): `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- `npm run dev` | `npm run build` | `npm run lint` | `npm run typecheck`
+- Env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 
 ## Struktur
 ```
-index.html, vite.config.ts, tailwind.config.js, components.json (shadcn)
-.bolt/                      config & prompt Bolt. .bolt/ignore mengecualikan src/components/ui/* dan hooks/use-toast.ts
-public/assets/wallet-logos/ logo SVG provider dompet (placeholder, bukan artwork resmi). Dirujuk dari wallet-providers.ts
-supabase/migrations/        skema DB (4 file di feat/tambah-dompet, lihat Database)
+supabase/
+  migrations/                 skema DB. Setiap perubahan = file baru, migrasi lama tidak diubah
+  functions/
+    scan-image/               OCR struk dan mutasi (Gemini)
+    ai-analysis/              insight dan saran hemat dari ringkasan angka periode (Gemini)
+    ai-categorize/            saran subkategori dari deskripsi: riwayat, kata kunci, lalu Gemini
+    ai-chat/                  Asisten Keuangan AI: cek kuota 20 per hari, ringkasan angka bulan berjalan, lalu Gemini
 src/
-  main.tsx, App.tsx         entry; App memegang state view, dateRange, sheet tambah transaksi & dompet
-  app/                      satu file per halaman
-    views.ts                type View = dashboard|wallets|transactions|scanner|settings; TransactionSection (duplikat dengan types.ts)
-    dashboard-view.tsx      metrik, chart arus kas, kategori, target tabungan, transaksi terbaru
-    wallets-view.tsx        kartu dompet, rincian saldo, tombol arsip per dompet, bagian Dompet Diarsipkan dengan Pulihkan
-    transactions-view.tsx   satu komponen untuk 4 submenu (all, income, expense, transfer). Tiap submenu punya tombol form sendiri (AddTransactionSheet dengan lockTab). Submenu Transfer menampilkan daftar transfer.
-    scanner-view.tsx        upload struk/mutasi -> scan AI (Apps Script, scanImage) -> review -> simpan ke Supabase (insertTransaction / insertTransactions, dompet dipetakan dari nama ke id)
-    settings-view.tsx       input URL Google Apps Script (localStorage)
-    login-view.tsx          halaman masuk, daftar, dan lupa password (Supabase Auth)
+  App.tsx                     state view, dateRange, detailWalletId, aiSection, sheet tambah dompet
+  app/                        satu file per halaman
+    views.ts                  View, TransactionSection, AiSection
+    dashboard-view.tsx        KPI, arus kas, ringkasan, kategori, transaksi terbaru, target, insight AI (tersimpan: dashboard), notifikasi
+    wallets-view.tsx          ringkasan dompet, kartu (persen bulan ini, klik ke detail), rincian, arsip dan pulihkan (dengan paginasi)
+    wallet-detail-view.tsx    detail dompet: ringkasan, riwayat, pengeluaran per kategori
+    transactions-view.tsx     empat submenu (semua, pemasukan, pengeluaran, transfer), riwayat, aksi ubah dan hapus
+    budget-view.tsx           ringkasan, grafik anggaran vs realisasi, distribusi, aturan 50/30/20, batas per subkategori (Lihat Semua, paginasi), target tabungan
+    rencana-view.tsx          menu Rencana bulanan (draf rencana pengeluaran dan pemasukan)
+    analisa-view.tsx          periode bulan, rentang, tahun. KPI, tren, insight, kategori, top 5, ringkasan, aliran dana, status. Insight AI tersimpan (kind: analisa)
+    scanner-view.tsx          AI Smart Scanner: unggah, pindai (scan-image), periksa, simpan. Melapor hasil lewat onResult dan onDiscard
+    ai-scanner-page.tsx       AI Scanner dengan tab Pindai, Hasil, Riwayat. Mencatat riwayat ke scan_batches
+    ai-center-view.tsx        hub AI Center dan sub-halaman: kategorisasi, asisten, prediksi, riwayat
+    ai-asisten-view.tsx       chat Asisten Keuangan AI (riwayat hanya di layar)
+    ai-prediksi-view.tsx      prediksi pengeluaran bulan depan dan skor kesehatan keuangan
+    ai-riwayat-view.tsx       daftar riwayat insight AI, filter Semua, Dashboard, Analisa
+    master-kategori-settings.tsx  CRUD kategori dan subkategori (Pengaturan)
+    berulang-settings.tsx     CRUD transaksi berulang (Pengaturan)
+    settings-view.tsx         Pengaturan
+    login-view.tsx            masuk, daftar, lupa password, atur ulang password
   components/
-    sidebar, header, cashflow-charts, transaction-list, wallet-card, metric-card, date-range-picker,
-    add-transaction-sheet.tsx   form tambah transaksi (side sheet), simpan lewat prop addTransaction (Supabase, dari use-dashboard)
-    add-wallet-sheet.tsx        form tambah dompet: pilih bank/e-wallet/lainnya, nama, saldo awal opsional,
-                                deteksi nama dompet arsip (pulihkan atau ganti nama arsip lalu buat baru)
-    edit-wallet-sheet.tsx       form ubah dompet aktif: nama, provider (jenis mengikuti provider, atau pilih untuk Lainnya), logo. Saldo tidak diubah dari sini.
-    ui/                         komponen shadcn (jangan diedit manual)
+    sidebar.tsx               menu: Dashboard, Dompet, Budget, Analisa, Rencana, grup Transaksi, grup AI Center (AI Scanner, Kategorisasi, Asisten, Prediksi, Riwayat), Pengaturan
+    header.tsx                judul dan ikon per view, tombol muat ulang, tema, profil
+    add-transaction-sheet.tsx form transaksi: subkategori opsional, saran dari deskripsi (riwayat, kata kunci, AI), chip nominal untuk transfer
+    add-wallet-sheet.tsx      tambah dompet: bank, e-wallet, tunai, lainnya; deteksi nama arsip
+    edit-wallet-sheet.tsx     ubah dompet: nama, provider, logo, saldo lewat transaksi penyesuaian
+    wallet-card.tsx           kartu dompet (min-h, bukan aspect-ratio, agar nominal tidak terpotong di iOS)
+    ui/                       komponen shadcn (jangan diedit manual)
   lib/
-    supabase-client.ts      createClient dari env VITE_* (cek env, exporter supabaseConfigured)
-    use-session.ts          hook sesi Supabase Auth (getSession + onAuthStateChange)
-    data.ts                 SEMUA akses Supabase: fetchDashboardData, insertTransaction(s), CRUD wallet,
-                            arsip/pulihkan/ganti nama/cek nama dompet
-    use-dashboard.ts        hook utama: load per date range, polling 30s, bungkus aksi tulis dari data.ts (aksi tulis belum dipakai UI)
-    api.ts                  klien Google Apps Script. Sisa: scanImage saja (dipensiunkan di Sprint 5). addTransaction sudah dihapus di Sprint 2
-    types.ts                semua type (Wallet, Transaction, DashboardData, WalletTransfer, Scan*)
-    date-range.ts           preset & format rentang tanggal
-    wallets.ts              styling brand dompet (BCA, GoPay, OVO, blu, ...)
-    wallet-providers.ts     daftar provider bank & e-wallet untuk sheet Tambah Dompet, termasuk path logo
-    format.ts, theme.tsx
-    demo-data.ts            data demo `demoDashboardData()`. Tidak diimpor oleh file yang sudah dibaca (lihat Temuan)
+    data.ts                   PINTU MASUK data: hanya `export *` dari src/lib/data/*
+    data/                     SEMUA akses Supabase, satu file per fitur:
+      shared.ts               WriteResult, toNumber, escapeLike
+      wallets.ts              dompet, logo, arsip, pulihkan, ganti nama, hapus
+      transactions.ts         transaksi
+      transfers.ts            transfer antar dompet
+      dashboard.ts            fetchDashboardData (memanggil proses_transaksi_berulang)
+      wallet-insights.ts      detail dompet, persen bulan ini, grafik saldo 6 bulan
+      budget.ts               subkategori (baca), budget, goals, matchSubkategori
+      master.ts               kategori dan subkategori master (CRUD)
+      berulang.ts             transaksi berulang (CRUD)
+      analisa.ts              report_summary dan fetchAiAnalysis
+      ai-reports.ts           riwayat insight AI: simpan, ambil terakhir, daftar
+      ai-chat.ts              askAiChat (Edge Function ai-chat)
+      scan-batches.ts         riwayat pindaian: daftar, buat, ubah status
+    use-dashboard.ts          hook utama: load per rentang, polling 30 detik, aksi tulis
+    use-analisa.ts            hook data analisa per rentang
+    use-session.ts            sesi Supabase Auth
+    supabase-client.ts        createClient dari env VITE_*
+    categorize.ts             wrapper Edge Function ai-categorize (tanpa akses tabel)
+    subkategori-suggest.ts    saran lokal dari nama subkategori dan tebakan kategori
+    health-score.ts           fungsi murni: prediksi bulan depan dan skor kesehatan keuangan (tanpa database)
+    api.ts                    sisa klien Google Apps Script (scanImage), akan dipensiunkan
+    types.ts, format.ts, date-range.ts, wallets.ts, wallet-providers.ts, theme.tsx
 ```
 
+## Aturan akses data (CLAUDE.md)
+- Query Supabase hanya di `src/lib/data/*`. Komponen mengimpor dari `@/lib/data`.
+- Menambah fitur data: buat file baru di `src/lib/data/`, lalu satu baris `export *` di `src/lib/data.ts`.
+- Helper bersama di `shared.ts`. Jangan menduplikasi.
+- Memanggil Edge Function dari browser boleh lewat wrapper di `src/lib` (contoh `categorize.ts`, `ai-chat.ts` di data) karena tidak mengakses tabel.
+
 ## Alur data
-`main.tsx` -> `App.tsx` -> `useDashboard(dateRange)` -> `data.fetchDashboardData()`.
-`fetchDashboardData` mengambil SEMUA baris `wallets` dan `transactions`, lalu memfilter tanggal di sisi klien. Hasilnya `DashboardData` dikirim sebagai props ke view.
-- `data.dompet` hanya berisi dompet AKTIF (`is_archived = false`). Total saldo, dropdown transaksi, transfer, dan scanner memakai daftar ini, jadi dompet arsip otomatis tidak muncul di sana.
-- Nama dompet arsip tetap dipakai untuk menampilkan riwayat transaksi lama.
-Polling ulang tiap 30 detik. Setelah tulis data, view memanggil `onSaved/onSubmitted/onChanged` -> `refresh()`.
+- `App.tsx` -> `useDashboard(dateRange)` -> `fetchDashboardData` -> `DashboardData` (dompet aktif, transaksi terfilter, tren 12 bulan, rekap kategori).
+- `fetchDashboardData` mengambil semua transaksi lalu memfilter rentang di klien.
+- Setelah tulis data, view memanggil `onSaved` atau `onChanged`, lalu `refresh()`.
+- Insight AI (Dashboard dan Analisa): `fetchAiAnalysis` -> `saveAiReport` -> tampil di Riwayat AI.
+- Pindai: `scanImage` -> `onResult` -> `createScanBatch` (draft) -> `onSaved` atau `onDiscard` -> `setScanBatchStatus` (saved atau cancelled).
+- Asisten AI: `askAiChat` -> Edge Function `ai-chat` (kuota di database, ringkasan angka, Gemini).
 
-## Database (Supabase)
-- Edge Function `supabase/functions/ai-analysis/index.ts`: insight AI dan saran hemat dari ringkasan angka periode (Gemini, JSON, fallback model, `GEMINI_MODELS` opsional). Dipanggil dari `fetchAiAnalysis` di `data.ts` oleh kartu Insight AI di `analisa-view.tsx`. Belum di-deploy.
-- `wallets(id, nama UNIQUE, provider, saldo, created_at)`: seed 6 dompet bawaan
-- `transactions(id, tanggal, deskripsi, tipe 'Pemasukan'|'Pengeluaran', nominal, kategori, wallet_id FK, berulang, transfer_id FK, created_at)`
-- `wallet_transfers(id, tanggal, from_wallet_id, to_wallet_id, nominal>0, biaya_admin>=0, catatan, created_at)`
-- Trigger (migrasi ke-2): insert/update/delete transaksi menyesuaikan `wallets.saldo`. Transfer menyesuaikan saldo asal/tujuan dan membuat transaksi "Biaya admin transfer" bila `biaya_admin > 0`.
-- Migrasi ke-3 `20261121120000_user_scoping_rls.sql`: kolom `user_id` (default auth.uid()) di ketiga tabel; RLS hanya pemilik (`auth.uid() = user_id`); anon dicabut; trigger memastikan dompet milik pengguna yang sama. Backfill data lama dan NOT NULL dijalankan manual setelah akun pertama dibuat.
-- Migrasi `20261121130000_wallet_jenis_logo.sql`: kolom `jenis` ('bank'|'ewallet'|'lainnya') dan `logo_url` di `wallets`; bucket publik `wallet-logos` dengan policy per folder user.
-- Migrasi `20261122120000_wallet_edit_grants.sql`: `GRANT UPDATE (jenis, logo_url)` untuk `authenticated` agar menu edit dompet bisa menyimpan. `saldo` dan `user_id` tetap tidak bisa diubah langsung.
-- Migrasi `20261122090000_wallet_archive.sql`: kolom `wallets.is_archived` (default false) dan `wallets.archived_at`; trigger `guard_archived_tx` dan `guard_archived_transfer` yang menolak transaksi atau transfer BARU (atau yang dialihkan) ke dompet arsip. Transaksi dan transfer lama di dompet arsip tetap bisa diubah dan dihapus. Saldo dompet arsip tetap tersimpan.
+## Database (ringkas)
+- Tabel: `wallets`, `transactions`, `wallet_transfers`, `subkategori`, `kategori`, `budgets`, `goals`, `transaksi_berulang`, `ai_reports`, `ai_chat_usage`, `scan_batches`.
+- RLS pemilik (`user_id = auth.uid()`) di semua tabel di atas.
+- `wallets.jenis`: 'bank' | 'ewallet' | 'tunai' | 'lainnya'. Dompet `CASH` sudah dipindah ke 'tunai'.
+- Fungsi: `report_summary`, `proses_transaksi_berulang`, `ai_chat_consume` (batas 20 per hari WIB), `seed_master_akun`, `default_subkategori_keywords`.
+- Trigger: saldo dompet dihitung otomatis dari transaksi dan transfer. Subkategori baru mendapat kata kunci bawaan. Dompet arsip menolak transaksi baru.
+- Bucket Storage: `wallet-logos` (publik, per folder user).
 
-## Status migrasi (PENTING sebelum mengubah kode)
-Proyek sedang pindah dari Google Apps Script/Sheets ke Supabase; belum selesai:
-Sprint 1 (login, RLS per user) SELESAI dan terverifikasi di database:
-- Policy `*_owner_*` per user ada di `wallets`, `transactions`, `wallet_transfers`. Role `anon` tidak punya hak SELECT pada ketiga tabel.
-- `authenticated` tidak bisa UPDATE `wallets.saldo` maupun `user_id` (REVOKE kolom berfungsi). Dugaan di bawah sudah tidak berlaku.
-- `DEFAULT_APPS_SCRIPT_URL` dan key di kode sudah dihapus. Placeholder `KEY_ANDA` di `settings-view.tsx` hanya teks contoh.
-- Belum dibuktikan dengan tes dua akun (S1-11). Lupa password (S1-06) belum diverifikasi.
+## Migrasi terbaru (urut)
+- `20261122140000` subkategori, budget, goals
+- `20261122150000` ai_reports
+- `20261122160000` kategori master dan transaksi berulang
+- `20261123090000` subkategori_keywords
+- `20261124090000` wallet_jenis_tunai (constraint)
+- `20261125090000` wallet_cash_tunai (data)
+- `20261126090000` ai_chat_usage
+- `20261127090000` scan_batches
 
-Sprint 2 (jalur tulis ke Supabase), di branch `feat/sprint-2-jalur-data`:
-- Scanner menyimpan ke Supabase lewat `insertTransaction` (struk) dan `insertTransactions` (mutasi, satu insert). Dompet dipetakan dari nama ke `id`.
-- `addTransaction` di `api.ts` dihapus. Form tambah transaksi sudah memakai Supabase sejak sebelumnya.
-- Belum diuji di browser dengan login. Verifikasi manual diperlukan: simpan struk, simpan mutasi, dan saldo dompet berubah.
+## Edge Functions (semua verify_jwt = true)
+- `scan-image`, `ai-analysis`, `ai-categorize`, `ai-chat`. Semua memakai `GEMINI_API_KEY` dari Secrets.
 
-Yang masih tersisa:
-1. `scanImage` (scan AI) masih lewat Apps Script. Dipindah ke Edge Function di Sprint 5.
-2. `settings-view.tsx` masih menyimpan URL Apps Script untuk scanner. Hilang bersama scanner di Sprint 5.
-3. Transfer antar dompet: tabel, trigger, dan type ada, tapi belum ada fungsi UI (Sprint 3).
-4. Kategori masih teks bebas. `scanner-view` mengirim kategori hasil AI apa adanya (Sprint 4 membuat FK ke subkategori).
-5. Teks UI masih menyebut Google Sheets (lihat Temuan).
+## Yang sudah selesai (ringkas)
+- Dompet: tunai, sembunyi saldo, detail dompet, persen bulan ini, arsip, ubah, footer form di atas badge Netlify.
+- Transaksi: subkategori opsional, saran dari deskripsi (tiga lapis), chip nominal transfer.
+- Budget: redesign sesuai mockup, batas dengan Lihat Semua dan paginasi, grup Tabungan dari subkategori.
+- AI Center: hub, Kategorisasi, Asisten Keuangan AI, Prediksi & Kesehatan, Riwayat AI, AI Scanner dengan tab dan riwayat pindaian.
+- Analisa: insight AI tersimpan ke riwayat.
+- Refactor data per fitur.
 
-## Riwayat perubahan
-- PR #3 (Sprint 1): login, sesi, RLS per user, backfill user_id.
-- PR #4: tambah dompet dengan bank, e-wallet, Lainnya, saldo awal, arsip dengan pulihkan atau mulai baru.
-- PR #5: menu ubah dompet (nama, provider, jenis, logo). Saldo diubah lewat transaksi penyesuaian. Logo unggahan dinormalisasi otomatis ke PNG 480×160. Logo resmi blu by BCA Digital ditambahkan ke katalog.
-- Sprint 2: lihat bagian di atas.
-- Sprint 3 (branch `feat/sprint-3-edit-hapus`): kolom Aksi di riwayat transaksi berisi tombol ubah (sheet mode edit, `editTransaction`) dan hapus. Hapus lewat tombol Hapus di sheet edit, dengan jeda 8 detik dan tombol Urungkan. Penghapusan dijalankan setelah jeda, atau saat halaman ditutup. Peringatan duplikat dicek di sisi klien (tanggal, deskripsi, nominal, dompet) dan tidak memblokir simpan. Baris transaksi hasil transfer (`transferId`) tidak bisa diubah dari submenu Transaksi.
-- Deviasi dari dokumen Sprint 3: "soft delete" di sisi klien, bukan kolom `deleted_at` di database. Tidak ada riwayat hapus, dan tidak ada `dedupe_hash`.
-
-## Temuan kode (dari file yang sudah dibaca)
-- Delta metrik hardcoded, bukan dari data: `dashboard-view.tsx` memakai `4.2`, `-3.1`, dan persentase tabungan. `transactions-view.tsx` `SummaryCard` selalu menampilkan `+0.0%`.
-- Mode demo tidak bisa tercapai: `use-dashboard.ts` selalu mengembalikan `usingDemo: false`, jadi cabang "Mode Demo" di sidebar dan header tidak pernah aktif.
-- Teks usang: pesan error dan footer di `App.tsx` menyebut Google Sheets dan data demo. Sidebar menulis "Data live dari Google Sheets". `wallet-card.tsx` menulis "Hubungkan Google Apps Script".
-- Target tabungan hardcoded Rp 50.000.000 di `BudgetRule`. Progres dihitung dari `totalSaldo`, bukan dari tabungan periode.
-- Setiap 30 detik seluruh tabel `transactions` diambil lalu difilter di klien. Akan melambat seiring data bertambah.
-- `.gitignore` tidak mengabaikan `*.tsbuildinfo`, padahal `tsconfig.app.tsbuildinfo` dan `tsconfig.node.tsbuildinfo` ikut ter-commit.
-- `index.html` memakai `lang="en"` dan title berbahasa Inggris, sementara UI berbahasa Indonesia.
-- `demo-data.ts`: tidak ditemukan impor dari file yang sudah dibaca. Impor di `ui/` dan `hooks/` belum diperiksa, jadi belum bisa dipastikan sebagai kode mati.
-- `add-wallet-sheet.tsx` dan `wallets-view.tsx` belum diuji typecheck atau lint dari sisi repo; perlu `npm run typecheck` dan `npm run lint`.
+## Yang belum atau perlu dicek
+- Typecheck dan lint untuk PR #47 sampai #56 belum dijalankan dari repo. Jalankan `npm run typecheck` dan `npm run lint` sebelum melanjutkan.
+- Tes manual di browser: Asisten (batas 20), Riwayat AI (filter), Prediksi, tab AI Scanner, detail dompet.
+- Rencana bulanan (#52): ringkasan belum saya baca di sini.
+- Transaksi (#51, redesign): belum saya baca di sini.
+- Fase 3 dan 4 dari blueprint yang belum ada: filter dan paginasi di Transaksi, notifikasi budget 50, 80, 100 persen, preset 3 dan 6 bulan di Analisa, ekspor Excel, impor Excel, cek kecocokan, halaman rumus dan metodologi.
+- Telegram (Fase 5): belum dimulai.
+- Prediksi dan skor kesehatan: belum ada notifikasi atau insight anomali (Fase C lanjutan).
+- Sub-menu Prediksi di sidebar sudah ada (PR #56).
 
 ## Keamanan
-- `settings-view.tsx` memuat URL Apps Script default lengkap dengan parameter `?key=...` di repo publik. Key yang sama muncul juga di atribut `placeholder` input. Sebaiknya key diganti (rotate) dan URL dipindah ke env/pengaturan.
-- Policy RLS terbuka untuk `anon`. Siapa pun yang punya anon key (yang memang ada di bundle frontend) bisa membaca dan mengubah semua data. Ini disengaja untuk single-tenant, tapi perlu diingat jika data menjadi lebih sensitif.
+- Kunci Gemini hanya di Supabase Secrets. Kunci Apps Script lama di repo publik sudah tidak dipakai, tapi sebaiknya dicabut dan dibuat ulang.
+- Anon key ada di frontend. Keamanan data bergantung pada RLS, bukan pada kerahasiaan anon key.
 
-## Sprint 4: Budget & Subkategori (status)
-
-- Migrasi `20261122140000_subkategori_budget_goals.sql` (PR #10, sudah diterapkan): tabel `subkategori`, `budgets`, `goals`, kolom `transactions.subkategori_id`, seed default per akun, RLS pemilik baris.
-- `src/lib/data.ts` (bagian Sprint 4): `fetchBudgetData`, `upsertBudgetLimit`, `deleteBudgetRow`, `insertGoal`, `updateGoalRow`, `deleteGoalRow`. `NON_REAL_KATEGORI` mengecualikan kategori Transfer dan Penyesuaian Saldo dari pemasukan dan 50/30/20.
-- `src/app/budget-view.tsx`: menu Budget (sidebar, header, select mobile, App.tsx). Berisi ringkasan 50/30/20, batas per subkategori, dan target tabungan (isi terkumpul manual).
-- PR #13: dropdown subkategori di form transaksi (`add-transaction-sheet.tsx`), pemetaan kategori AI ke subkategori di scanner (`scanner-view.tsx`, `matchSubkategori` di `data.ts`), dan penyesuaian saldo memakai subkategori `Penyesuaian Saldo` (`edit-wallet-sheet.tsx`).
-- Belum diuji di browser: tambah dan edit transaksi, scan struk dan mutasi, penyesuaian saldo, menu Budget.
-
-## Sprint 6: master kategori & transaksi berulang (status)
-
-- Migrasi `20261122160000_kategori_master_berulang.sql` (sudah diterapkan ke project `bdaoftrmiesxioinsxlp`):
-  - Tabel `kategori` (master level 1, per akun, RLS pemilik) dan kolom `subkategori.is_system`, `aktif`, `urutan`.
-  - Seed master dari Excel "Hepeng History New Generation 4" lewat fungsi `seed_master_akun`. Berlaku untuk akun baru dan backfill akun lama. Subkategori lama di luar master dinonaktifkan, tidak dihapus.
-  - Trigger `subkategori_guard_system` dan `kategori_guard_system` melarang ubah, nonaktifkan, atau hapus item sistem.
-  - Tabel `transaksi_berulang` dan fungsi `proses_transaksi_berulang()` (dipanggil dari `fetchDashboardData`, idempoten).
-- `src/lib/data.ts`: `fetchSubkategori` hanya mengembalikan yang aktif. `fetchBudgetData` memakai flag `isSystem` (bukan lagi nama). CRUD kategori, subkategori, dan transaksi berulang ada di bagian "Master kategori & subkategori" dan "Transaksi berulang".
-- `src/app/master-kategori-settings.tsx`: CRUD kategori dan subkategori di Pengaturan.
-- `src/app/berulang-settings.tsx`: CRUD transaksi berulang di Pengaturan.
-- `NON_REAL_KATEGORI` masih diekspor untuk kompatibilitas. Belum dipakai di jalur agregasi.
-- Belum dikerjakan di sprint ini: filter dan pagination di Transaksi (3.5), agregasi per kategori dan notifikasi 50/80/100% di Budget (3.3), preset 3 dan 6 bulan (3.4), jenis tunai dan nomor rekening di Dompet (3.2, K2, K3), dan target tabungan bulanan (K5).
+## Belum diverifikasi (jangan dianggap fakta)
+- `src/components/ui/*`, `src/lib/utils.ts`, `src/components/logo.tsx`, `theme-toggle.tsx`, `date-range-picker.tsx`, `transaction-list.tsx`, `cashflow-charts.tsx`, `metric-card.tsx`, `use-analisa.ts`, `rencana-view.tsx`, `transactions-view.tsx` (isi detailnya).
+- `.bolt/`, `tailwind.config.js`, `components.json`, `tsconfig*.json`, `eslint.config.js` (sebagian sudah dibaca di sesi sebelumnya).
