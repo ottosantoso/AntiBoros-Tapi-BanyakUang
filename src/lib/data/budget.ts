@@ -87,6 +87,8 @@ interface TxAggDbRow {
   tipe: string;
   nominal: number | string;
   subkategori_id: string | null;
+  kategori: string | null;
+  transfer_id: string | null;
 }
 
 export async function fetchBudgetData(range: { start: string; end: string }): Promise<BudgetData> {
@@ -97,7 +99,7 @@ export async function fetchBudgetData(range: { start: string; end: string }): Pr
       supabase.from('goals').select('id,nama,target,terkumpul,deadline').order('created_at', { ascending: true }),
       supabase
         .from('transactions')
-        .select('tipe,nominal,subkategori_id')
+        .select('tipe,nominal,subkategori_id,kategori,transfer_id')
         .gte('tanggal', range.start)
         .lte('tanggal', range.end),
     ]);
@@ -109,15 +111,16 @@ export async function fetchBudgetData(range: { start: string; end: string }): Pr
     const subkategori: Subkategori[] = ((subRes.data ?? []) as SubkategoriDbRow[])
       .map(subkategoriFromRow)
       .filter((s) => s.aktif);
-    const systemById = new Map(subkategori.map((s) => [s.id, s.isSystem]));
-
     let pemasukan = 0;
     const spentBySubkat: Record<string, number> = {};
     for (const r of (txRes.data ?? []) as TxAggDbRow[]) {
       const nominal = toNumber(r.nominal);
-      const isSystem = r.subkategori_id ? systemById.get(r.subkategori_id) === true : false;
+      // Koreksi saldo dan sisi transfer antar dompet bukan uang masuk/keluar riil. Pemasukan dari pihak luar tetap dihitung.
+      const isKoreksi = r.kategori === 'Penyesuaian Saldo';
+      const isSisiTransfer = r.transfer_id !== null && r.kategori !== 'Biaya Admin';
+      if (isKoreksi || isSisiTransfer) continue;
       if (r.tipe === 'Pemasukan') {
-        if (!isSystem) pemasukan += nominal;
+        pemasukan += nominal;
       } else if (r.subkategori_id) {
         spentBySubkat[r.subkategori_id] = (spentBySubkat[r.subkategori_id] ?? 0) + nominal;
       }

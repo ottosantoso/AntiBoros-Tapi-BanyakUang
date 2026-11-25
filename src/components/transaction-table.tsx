@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react';
 import type { Transaction } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatIDR } from '@/lib/format';
@@ -13,6 +13,7 @@ const JENIS_BADGE: Record<Jenis, string> = {
   Pemasukan: 'bg-[#dcfce7] text-[#047857]',
   Pengeluaran: 'bg-[#ffe4e6] text-[#be123c]',
   Transfer: 'bg-[#dbeafe] text-[#1d4ed8]',
+  Penyesuaian: 'bg-[#f1f5f9] text-[#475569]',
 };
 
 const CATEGORY_TONES = [
@@ -37,6 +38,11 @@ function formatTanggal(iso: string): string {
   return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+/** Label pihak luar: "Ke: istri" untuk pengeluaran, "Dari: istri" untuk pemasukan. */
+function pihakLabel(tx: Transaction): string {
+  return `${tx.tipe === 'Pengeluaran' ? 'Ke' : 'Dari'}: ${tx.pihakLuar ?? ''}`;
+}
+
 function JenisBadge({ jenis }: { jenis: Jenis }) {
   return <span className={cn('inline-flex w-fit rounded-full px-2.5 py-1 text-[10px] font-extrabold', JENIS_BADGE[jenis])}>{jenis}</span>;
 }
@@ -50,6 +56,7 @@ function TxIcon({ tx }: { tx: Transaction }) {
   const jenis = txJenis(tx);
   const className = 'grid h-8 w-8 shrink-0 place-items-center rounded-lg';
   if (jenis === 'Transfer') return <span className={cn(className, 'bg-[#ede9fe] text-[#7c3aed]')}><ArrowLeftRight className="h-4 w-4" /></span>;
+  if (jenis === 'Penyesuaian') return <span className={cn(className, 'bg-[#f1f5f9] text-[#475569]')}><SlidersHorizontal className="h-4 w-4" /></span>;
   if (jenis === 'Pemasukan') return <span className={cn(className, 'bg-[#dcfce7] text-[#059669]')}><ArrowDownLeft className="h-4 w-4" /></span>;
   return <span className={cn(className, 'bg-[#ffe4e6] text-[#e11d48]')}><ArrowUpRight className="h-4 w-4" /></span>;
 }
@@ -155,7 +162,7 @@ export function TransactionTable({ rows, balances, onEdit, onDelete }: Transacti
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-[#172554]">{tx.deskripsi}</p>
                 <p className="mt-0.5 truncate text-[11px] font-medium text-[#5b6f99]">
-                  {formatTanggal(tx.tanggal)} · {tx.dompet}
+                  {formatTanggal(tx.tanggal)} · {tx.dompet}{tx.pihakLuar ? ` · ${pihakLabel(tx)}` : ''}
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   <JenisBadge jenis={txJenis(tx)} />

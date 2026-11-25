@@ -3,6 +3,7 @@ import type { DashboardData, MonthlyTrend, Transaction } from '../types';
 import { shortMonth } from '../format';
 import { walletFromRow, type WalletRow } from './wallets';
 import { transactionFromRow, type TransactionRow } from './transactions';
+import { isPemasukanRiil, isPengeluaranRiil } from '../transaction-view';
 
 /* ---------- Dashboard: agregat satu rentang ---------- */
 
@@ -46,19 +47,20 @@ export async function fetchDashboardData(range?: { start?: string; end?: string 
       return true;
     });
 
-    const pemasukan = scoped.filter((t) => t.tipe === 'Pemasukan').reduce((s, t) => s + t.nominal, 0);
-    const pengeluaran = scoped.filter((t) => t.tipe === 'Pengeluaran').reduce((s, t) => s + t.nominal, 0);
+    // Pemasukan/pengeluaran riil: koreksi saldo dan sisi transfer antar dompet tidak dihitung.
+    const pemasukan = scoped.filter(isPemasukanRiil).reduce((s, t) => s + t.nominal, 0);
+    const pengeluaran = scoped.filter(isPengeluaranRiil).reduce((s, t) => s + t.nominal, 0);
 
     const rekapKategori: Record<string, number> = {};
     scoped
-      .filter((t) => t.tipe === 'Pengeluaran')
+      .filter(isPengeluaranRiil)
       .forEach((t) => {
         const k = t.kategori ?? 'Lainnya';
         rekapKategori[k] = (rekapKategori[k] ?? 0) + t.nominal;
       });
 
     const topPengeluaran = [...scoped]
-      .filter((t) => t.tipe === 'Pengeluaran')
+      .filter(isPengeluaranRiil)
       .sort((a, b) => b.nominal - a.nominal)
       .slice(0, 5)
       .map((t) => ({ deskripsi: t.deskripsi, nominal: t.nominal }));
@@ -95,8 +97,8 @@ function buildMonthlyTrend(allTx: Transaction[], months: number): MonthlyTrend[]
     const monthTx = allTx.filter((t) => t.tanggal.startsWith(key));
     out.push({
       bulan: shortMonth(d.getMonth()),
-      pemasukan: monthTx.filter((t) => t.tipe === 'Pemasukan').reduce((s, t) => s + t.nominal, 0),
-      pengeluaran: monthTx.filter((t) => t.tipe === 'Pengeluaran').reduce((s, t) => s + t.nominal, 0),
+      pemasukan: monthTx.filter(isPemasukanRiil).reduce((s, t) => s + t.nominal, 0),
+      pengeluaran: monthTx.filter(isPengeluaranRiil).reduce((s, t) => s + t.nominal, 0),
     });
   }
   return out;

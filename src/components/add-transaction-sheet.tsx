@@ -43,6 +43,15 @@ const NOMINAL_CEPAT: { nilai: number; label: string }[] = [
   { nilai: 1_000_000, label: 'Rp 1jt' },
 ];
 
+/** Tujuan transfer: antar dompet terdaftar, ke pihak luar (pengeluaran), atau dari pihak luar (pemasukan). */
+type ArahTransfer = 'dompet' | 'keluar' | 'masuk';
+
+const ARAH_HINT: Record<ArahTransfer, string> = {
+  dompet: 'Pindah saldo antar dompet terdaftar. Tidak dihitung sebagai pemasukan atau pengeluaran.',
+  keluar: 'Uang keluar ke orang atau dompet lain di luar aplikasi (mis. ShopeePay istri). Dihitung sebagai pengeluaran.',
+  masuk: 'Uang masuk dari orang atau dompet lain di luar aplikasi (mis. dari istri). Dihitung sebagai pemasukan.',
+};
+
 export type SheetTab = TransactionType | 'Transfer';
 
 interface Props {
@@ -72,6 +81,7 @@ export interface TxActions {
     kategori?: string;
     subkategoriId?: string | null;
     berulang?: boolean;
+    pihakLuar?: string;
   }) => Promise<{ success: boolean; error: string | null }>;
   editTransaction: (
     id: string,
@@ -136,6 +146,8 @@ export function AddTransactionSheet({
   const [toWallet, setToWallet] = useState('');
   const [biayaAdmin, setBiayaAdmin] = useState('');
   const [catatan, setCatatan] = useState('');
+  const [arah, setArah] = useState<ArahTransfer>('dompet');
+  const [pihakLuar, setPihakLuar] = useState('');
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -162,6 +174,8 @@ export function AddTransactionSheet({
       setToWallet(wallets[1]?.id ?? '');
       setBiayaAdmin('');
       setCatatan('');
+      setArah('dompet');
+      setPihakLuar('');
       setSaran(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,12 +190,14 @@ export function AddTransactionSheet({
   const selectedWallet = useMemo(() => wallets.find((w) => w.id === dompet), [dompet, wallets]);
   const fromSelected = useMemo(() => wallets.find((w) => w.id === fromWallet), [fromWallet, wallets]);
   const isTransfer = tab === 'Transfer';
+  /** Transfer ke/dari pihak luar: dicatat sebagai transaksi biasa pada satu dompet. */
+  const pihakMode = isTransfer && arah !== 'dompet';
 
   const insufficientBalance =
     tab === 'Pengeluaran' && Boolean(selectedWallet) && numeric > (selectedWallet?.saldo ?? 0);
-  const invalidTransfer =
-    isTransfer &&
-    (!fromWallet || !toWallet || fromWallet === toWallet || numeric <= 0 || numeric + adminNumeric > (fromSelected?.saldo ?? 0));
+  const invalidTransfer = isTransfer && (pihakMode
+    ? !dompet || pihakLuar.trim().length === 0 || numeric <= 0 || (arah === 'keluar' && numeric > (selectedWallet?.saldo ?? 0))
+    : !fromWallet || !toWallet || fromWallet === toWallet || numeric <= 0 || numeric + adminNumeric > (fromSelected?.saldo ?? 0));
 
   // Daftar subkategori dari database, sesuai jenis transaksi tab aktif.
   useEffect(() => {
@@ -286,6 +302,22 @@ export function AddTransactionSheet({
         subkategoriId: effectiveSubId || null,
         berulang,
       });
+    } else if (isTransfer && pihakMode) {
+      const jenisPihak: TransactionType = arah === 'keluar' ? 'Pengeluaran' : 'Pemasukan';
+      const subTransfer = subkategoriList.find((s) => s.nama === 'Transfer' && s.jenis === jenisPihak);
+      const pihak = pihakLuar.trim();
+      const ket = catatan.trim();
+      result = await addTransaction({
+        tanggal,
+        deskripsi: `${arah === 'keluar' ? 'Transfer ke' : 'Transfer dari'} ${pihak}${ket ? ` — ${ket}` : ''}`,
+        tipe: jenisPihak,
+        nominal: numeric,
+        walletId: dompet,
+        kategori: 'Transfer',
+        subkategoriId: subTransfer?.id ?? null,
+        berulang: false,
+        pihakLuar: pihak,
+      });
     } else if (isTransfer) {
       result = await addTransfer({
         tanggal,
@@ -370,34 +402,79 @@ export function AddTransactionSheet({
             {isTransfer ? (
               <>
                 <div className="space-y-2">
-                  <Label className="text-sm font-extrabold text-foreground">Dari dompet</Label>
-                  <Select value={fromWallet} onValueChange={setFromWallet}>
-                    <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
-                      <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" /><SelectValue placeholder="Pilih dompet asal" /></div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {wallets.map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {fromSelected && (
-                    <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-xs">
-                      <span className="font-semibold text-muted-foreground">Saldo dompet asal</span>
-                      <span className={cn('font-extrabold tnum', fromSelected.saldo >= 0 ? 'text-emerald-300' : 'text-rose-300')}>{formatIDR(fromSelected.saldo)}</span>
-                    </div>
-                  )}
+                  <Label className="text-sm font-extrabold text-foreground">Tujuan transfer</Label>
+                  <div className="grid grid-cols-3 gap-1 rounded-2xl bg-muted p-1" role="group" aria-label="Tujuan transfer">
+                    <TabButton active={arah === 'dompet'} onClick={() => setArah('dompet')} activeClass="bg-violet-500 text-white shadow-[0_5px_12px_rgba(139,92,246,0.3)]">
+                      Antar dompet
+                    </TabButton>
+                    <TabButton active={arah === 'keluar'} onClick={() => setArah('keluar')} activeClass="bg-rose-500 text-white shadow-[0_5px_12px_rgba(244,63,94,0.3)]">
+                      Ke pihak luar
+                    </TabButton>
+                    <TabButton active={arah === 'masuk'} onClick={() => setArah('masuk')} activeClass="bg-emerald-500 text-white shadow-[0_5px_12px_rgba(16,185,129,0.3)]">
+                      Dari pihak luar
+                    </TabButton>
+                  </div>
+                  <p className="text-[11px] font-semibold text-muted-foreground">{ARAH_HINT[arah]}</p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-extrabold text-foreground">Ke dompet</Label>
-                  <Select value={toWallet} onValueChange={setToWallet}>
-                    <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
-                      <div className="flex items-center gap-2"><Send className="h-4 w-4 text-violet-300" /><SelectValue placeholder="Pilih dompet tujuan" /></div>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {wallets.filter((w) => w.id !== fromWallet).map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {pihakMode ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-extrabold text-foreground">{arah === 'keluar' ? 'Dari dompet' : 'Ke dompet'}</Label>
+                      <Select value={dompet} onValueChange={setDompet}>
+                        <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
+                          <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" /><SelectValue placeholder="Pilih dompet" /></div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {wallets.map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {selectedWallet && (
+                        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                          <span className="font-semibold text-muted-foreground">Saldo dompet</span>
+                          <span className={cn('font-extrabold tnum', selectedWallet.saldo >= 0 ? 'text-emerald-300' : 'text-rose-300')}>{formatIDR(selectedWallet.saldo)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="tx-pihak" className="text-sm font-extrabold text-foreground">{arah === 'keluar' ? 'Dikirim ke' : 'Diterima dari'}</Label>
+                      <Input id="tx-pihak" placeholder="cth. Istri, ShopeePay istri" value={pihakLuar} onChange={(e) => setPihakLuar(e.target.value)} maxLength={80} className="h-11 rounded-xl border-border bg-card font-medium text-foreground placeholder:text-muted-foreground" required />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-extrabold text-foreground">Dari dompet</Label>
+                      <Select value={fromWallet} onValueChange={setFromWallet}>
+                        <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
+                          <div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" /><SelectValue placeholder="Pilih dompet asal" /></div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {wallets.map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {fromSelected && (
+                        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-3 py-2 text-xs">
+                          <span className="font-semibold text-muted-foreground">Saldo dompet asal</span>
+                          <span className={cn('font-extrabold tnum', fromSelected.saldo >= 0 ? 'text-emerald-300' : 'text-rose-300')}>{formatIDR(fromSelected.saldo)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-extrabold text-foreground">Ke dompet</Label>
+                      <Select value={toWallet} onValueChange={setToWallet}>
+                        <SelectTrigger className="h-11 rounded-xl border-border bg-card font-bold text-foreground">
+                          <div className="flex items-center gap-2"><Send className="h-4 w-4 text-violet-300" /><SelectValue placeholder="Pilih dompet tujuan" /></div>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {wallets.filter((w) => w.id !== fromWallet).map((w) => <SelectItem key={w.id} value={w.id}>{w.nama}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="tx-nominal-tf" className="text-sm font-extrabold text-foreground">Nominal (Rp)</Label>
@@ -422,24 +499,29 @@ export function AddTransactionSheet({
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="tx-admin" className="text-sm font-extrabold text-foreground">Biaya admin (opsional)</Label>
-                  <NumberInput id="tx-admin" value={biayaAdmin} numeric={adminNumeric} onChange={setBiayaAdmin} />
-                  <p className="text-[11px] font-semibold text-muted-foreground">
-                    Biaya admin otomatis tercatat sebagai pengeluaran kategori "Biaya Admin".
-                  </p>
-                </div>
+                {!pihakMode && (
+                  <div className="space-y-2">
+                    <Label htmlFor="tx-admin" className="text-sm font-extrabold text-foreground">Biaya admin (opsional)</Label>
+                    <NumberInput id="tx-admin" value={biayaAdmin} numeric={adminNumeric} onChange={setBiayaAdmin} />
+                    <p className="text-[11px] font-semibold text-muted-foreground">
+                      Biaya admin otomatis tercatat sebagai pengeluaran kategori "Biaya Admin".
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="tx-note" className="text-sm font-extrabold text-foreground">Catatan (opsional)</Label>
                   <Input id="tx-note" placeholder="cth. Pindahkan tabungan" value={catatan} onChange={(e) => setCatatan(e.target.value)} maxLength={80} className="h-11 rounded-xl border-border bg-card font-medium text-foreground placeholder:text-muted-foreground" />
                 </div>
 
-                {fromWallet === toWallet && fromWallet && (
+                {!pihakMode && fromWallet === toWallet && fromWallet && (
                   <WarningBox>Dompet asal dan tujuan tidak boleh sama.</WarningBox>
                 )}
-                {fromSelected && numeric + adminNumeric > fromSelected.saldo && (
+                {!pihakMode && fromSelected && numeric + adminNumeric > fromSelected.saldo && (
                   <WarningBox>Nominal + biaya admin melebihi saldo dompet asal ({formatIDR(fromSelected.saldo)}).</WarningBox>
+                )}
+                {pihakMode && arah === 'keluar' && selectedWallet && numeric > selectedWallet.saldo && (
+                  <WarningBox>Nominal melebihi saldo dompet ({formatIDR(selectedWallet.saldo)}).</WarningBox>
                 )}
               </>
             ) : (

@@ -46,6 +46,8 @@ export interface Transaction {
   subkategoriId?: string;
   berulang?: boolean;
   transferId?: string;
+  /** Nama pihak luar (mis. istri, ShopeePay istri) untuk transfer ke/dari luar dompet terdaftar. */
+  pihakLuar?: string;
   createdAt?: string;
 }
 

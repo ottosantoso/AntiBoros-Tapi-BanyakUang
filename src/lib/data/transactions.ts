@@ -14,6 +14,7 @@ export interface TransactionRow {
   wallet_id: string | null;
   berulang: boolean | null;
   transfer_id: string | null;
+  pihak_luar?: string | null;
   subkategori_id?: string | null;
   created_at: string | null;
 }
@@ -29,6 +30,7 @@ export function transactionFromRow(r: TransactionRow): Transaction {
     walletId: r.wallet_id ?? undefined,
     berulang: r.berulang ?? false,
     transferId: r.transfer_id ?? undefined,
+    pihakLuar: r.pihak_luar ?? undefined,
     subkategoriId: r.subkategori_id ?? undefined,
     createdAt: r.created_at ?? undefined,
     dompet: '',
@@ -44,6 +46,8 @@ export interface NewTransactionInput {
   kategori?: string;
   subkategoriId?: string | null;
   berulang?: boolean;
+  /** Pihak luar untuk transfer ke/dari luar dompet terdaftar. */
+  pihakLuar?: string;
 }
 
 export type UpdateTransactionInput = Partial<NewTransactionInput>;
@@ -58,6 +62,7 @@ export async function insertTransaction(input: NewTransactionInput): Promise<Wri
     subkategori_id: input.subkategoriId || null,
     wallet_id: input.walletId || null,
     berulang: input.berulang ?? false,
+    pihak_luar: input.pihakLuar?.trim() || null,
   });
   if (error) return { success: false, error: error.message };
   return { success: true, error: null };
