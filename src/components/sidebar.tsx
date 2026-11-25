@@ -8,6 +8,7 @@ import {
   PiggyBank,
   BarChart3,
   ClipboardList,
+  HeartPulse,
   History,
   MessageSquare,
   Settings,
@@ -54,6 +55,7 @@ const AI_CHILDREN: {
   { id: 'scanner', label: 'AI Scanner', icon: ClipboardList, iconClass: 'text-amber-300', tileClass: 'bg-amber-500/15' },
   { id: 'kategorisasi', label: 'Kategorisasi Otomatis', icon: Tags, iconClass: 'text-emerald-300', tileClass: 'bg-emerald-500/15' },
   { id: 'asisten', label: 'Asisten Keuangan AI', icon: MessageSquare, iconClass: 'text-violet-300', tileClass: 'bg-violet-500/15' },
+  { id: 'prediksi', label: 'Prediksi & Kesehatan', icon: HeartPulse, iconClass: 'text-amber-300', tileClass: 'bg-amber-500/15' },
   { id: 'riwayat', label: 'Riwayat AI', icon: History, iconClass: 'text-sky-300', tileClass: 'bg-sky-500/15' },
 ];
 
