@@ -259,35 +259,35 @@ function PlanDetail({
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <Card className="flex flex-col gap-4 rounded-2xl p-4 sm:p-5 md:flex-row md:items-start md:justify-between">
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
-          <h2 className="truncate font-display text-base font-extrabold sm:text-lg">{rencana.nama}</h2>
-          <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold', STATUS_CLASS[rencana.status])}>
-            {STATUS_LABEL[rencana.status]}
-          </span>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end md:justify-end">
-          <ModelSelector
-            model={rencana.model}
-            persen={rencana.persen}
-            disabled={!editable || busy}
-            onSave={saveModel}
-          />
-          <div className="flex flex-wrap gap-2">
+      <Card className="rounded-2xl p-4 sm:p-5">
+        {/* Baris 1: judul dan tombol aksi, tinggi sama (h-10) dan rata tengah. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <h2 className="truncate font-display text-base font-extrabold sm:text-lg">{rencana.nama}</h2>
+            <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold', STATUS_CLASS[rencana.status])}>
+              {STATUS_LABEL[rencana.status]}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             {rencana.status === 'draft' && (
-              <Button size="sm" disabled={busy} onClick={() => onChangeStatus('aktif')} className="gap-2 rounded-full font-bold">
+              <Button disabled={busy} onClick={() => onChangeStatus('aktif')} className="h-10 gap-2 rounded-full px-4 font-bold">
                 <CheckCircle2 className="h-4 w-4" /> Aktifkan rencana
               </Button>
             )}
             {rencana.status === 'aktif' && (
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => onChangeStatus('ditutup')} className="gap-2 rounded-full font-bold">
+              <Button variant="outline" disabled={busy} onClick={() => onChangeStatus('ditutup')} className="h-10 gap-2 rounded-full px-4 font-bold">
                 <Lock className="h-4 w-4" /> Tutup bulan
               </Button>
             )}
-            <Button size="sm" variant="ghost" disabled={busy} onClick={onDelete} className="gap-2 rounded-full font-bold text-destructive hover:text-destructive">
+            <Button variant="ghost" disabled={busy} onClick={onDelete} className="h-10 gap-2 rounded-full px-4 font-bold text-destructive hover:text-destructive">
               <Trash2 className="h-4 w-4" /> Hapus
             </Button>
           </div>
+        </div>
+
+        {/* Baris 2: model keuangan, di bawah judul dengan garis pemisah. */}
+        <div className="mt-4 border-t border-border pt-4">
+          <ModelSelector model={rencana.model} persen={rencana.persen} disabled={!editable || busy} onSave={saveModel} />
         </div>
       </Card>
 
