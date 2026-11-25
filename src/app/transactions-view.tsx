@@ -17,7 +17,9 @@ import {
   buildTransactionsCsv,
   dailySeries,
   exportFileName,
+  isPemasukanRiil,
   isTransfer,
+  isPengeluaranRiil,
   matchesJenis,
   parseNominal,
   txEffect,
@@ -147,42 +149,48 @@ export function TransactionsView({
     });
   }, [effectiveJenis, fromDate, kategori, maxValue, minValue, query, toDate, transactions, wallet]);
 
-  // Ringkasan mengikuti filter yang aktif. Transfer dipisah: sisi keluar dihitung sebagai total transfer,
-  // dan tidak pernah masuk pemasukan atau pengeluaran riil.
+  // Ringkasan mengikuti filter yang aktif. Pemasukan dan pengeluaran riil saja: koreksi saldo dan sisi transfer
+  // antar dompet tidak masuk. Total transfer antar dompet diambil dari wallet_transfers (dengan filter tanggal dan dompet).
+  const transferRows = useMemo(
+    () =>
+      transfers.filter((tr) => {
+        if (fromDate && tr.tanggal < fromDate) return false;
+        if (toDate && tr.tanggal > toDate) return false;
+        if (wallet !== 'all' && tr.fromWallet !== wallet && tr.toWallet !== wallet) return false;
+        return true;
+      }),
+    [transfers, fromDate, toDate, wallet],
+  );
+
   const summary = useMemo(() => {
     let income = 0;
     let expense = 0;
-    let transfer = 0;
     let incomeCount = 0;
     let expenseCount = 0;
-    let transferCount = 0;
     for (const tx of filtered) {
-      if (isTransfer(tx)) {
-        if (tx.tipe === 'Pengeluaran') {
-          transfer += tx.nominal;
-          transferCount += 1;
-        }
-        continue;
-      }
-      if (tx.tipe === 'Pemasukan') {
+      if (isPemasukanRiil(tx)) {
         income += tx.nominal;
         incomeCount += 1;
-      } else {
+      } else if (isPengeluaranRiil(tx)) {
         expense += tx.nominal;
         expenseCount += 1;
       }
     }
-    return { income, expense, net: income - expense, transfer, incomeCount, expenseCount, transferCount };
-  }, [filtered]);
+    const transfer = transferRows.reduce((sum, tr) => sum + tr.nominal, 0);
+    return { income, expense, net: income - expense, transfer, incomeCount, expenseCount, transferCount: transferRows.length };
+  }, [filtered, transferRows]);
 
   const series = useMemo(
     () => ({
-      income: dailySeries(filtered.filter((t) => !isTransfer(t) && t.tipe === 'Pemasukan'), (t) => t.nominal),
-      expense: dailySeries(filtered.filter((t) => !isTransfer(t) && t.tipe === 'Pengeluaran'), (t) => t.nominal),
-      net: dailySeries(filtered.filter((t) => !isTransfer(t)), txEffect),
-      transfer: dailySeries(filtered.filter((t) => isTransfer(t) && t.tipe === 'Pengeluaran'), (t) => t.nominal),
+      income: dailySeries(filtered.filter(isPemasukanRiil), (t) => t.nominal),
+      expense: dailySeries(filtered.filter(isPengeluaranRiil), (t) => t.nominal),
+      net: dailySeries(filtered.filter((t) => isPemasukanRiil(t) || isPengeluaranRiil(t)), txEffect),
+      transfer: dailySeries(
+        transferRows.map((tr) => ({ tanggal: tr.tanggal, nominal: tr.nominal }) as Transaction),
+        (t) => t.nominal,
+      ),
     }),
-    [filtered],
+    [filtered, transferRows],
   );
 
   // Halaman kembali ke 1 setiap filter atau jumlah baris per halaman berubah.
@@ -319,7 +327,7 @@ export function TransactionsView({
         <TransferList transfers={transfers} loading={loading} onAdd={() => openCreate('Transfer')} />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard
               label="Total Pemasukan"
               value={summary.income}
@@ -350,10 +358,19 @@ export function TransactionsView({
             <StatCard
               label="Total Transfer"
               value={summary.transfer}
-              hint={`${summary.transferCount} transfer`}
+              hint={`${summary.transferCount} transfer antar dompet`}
               icon={ArrowLeftRight}
               tone="transfer"
               series={series.transfer}
+              loading={loading}
+            />
+            <StatCard
+              label="Sisa Saldo Semua Dompet"
+              value={data.totalSaldo}
+              hint="Saldo dompet aktif saat ini"
+              icon={WalletCards}
+              tone="net"
+              series={series.net}
               loading={loading}
             />
           </div>

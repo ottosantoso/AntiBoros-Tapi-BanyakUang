@@ -1,17 +1,42 @@
 import type { Transaction } from '@/lib/types';
 import { toISODate } from '@/lib/format';
 
-/** Jenis tampilan satu baris: transfer antar-dompet dibedakan dari pemasukan/pengeluaran riil. */
-export type Jenis = 'Pemasukan' | 'Pengeluaran' | 'Transfer';
+/** Jenis tampilan satu baris. Penyesuaian = koreksi saldo, tidak dihitung sebagai pemasukan/pengeluaran. */
+export type Jenis = 'Pemasukan' | 'Pengeluaran' | 'Transfer' | 'Penyesuaian';
 export type JenisFilter = 'all' | Jenis;
 
-/** Baris transfer punya transferId (sisi keluar atau masuk). Tidak pernah dihitung sebagai pemasukan/pengeluaran. */
+/** Kategori sistem untuk koreksi saldo (edit saldo dompet). */
+export const KATEGORI_PENYESUAIAN = 'Penyesuaian Saldo';
+/** Kategori sistem untuk biaya admin transfer. Ini pengeluaran riil. */
+export const KATEGORI_BIAYA_ADMIN = 'Biaya Admin';
+
+/** Koreksi saldo dompet. Mengubah saldo, tapi bukan uang masuk atau keluar sungguhan. */
+export function isPenyesuaian(tx: Transaction): boolean {
+  return tx.kategori === KATEGORI_PENYESUAIAN;
+}
+
+/**
+ * Sisi transfer antar dompet di tabel transaksi. Biaya admin tidak termasuk, karena itu pengeluaran riil.
+ * Di database saat ini hanya biaya admin yang punya transferId, jadi fungsi ini cadangan untuk sisi transfer.
+ */
 export function isTransfer(tx: Transaction): boolean {
-  return Boolean(tx.transferId);
+  return Boolean(tx.transferId) && tx.kategori !== KATEGORI_BIAYA_ADMIN;
+}
+
+/** Pemasukan yang benar-benar uang masuk: termasuk dari pihak luar (istri, dsb.), tidak termasuk koreksi atau sisi transfer. */
+export function isPemasukanRiil(tx: Transaction): boolean {
+  return tx.tipe === 'Pemasukan' && !isPenyesuaian(tx) && !isTransfer(tx);
+}
+
+/** Pengeluaran yang benar-benar uang keluar: termasuk ke pihak luar dan biaya admin. */
+export function isPengeluaranRiil(tx: Transaction): boolean {
+  return tx.tipe === 'Pengeluaran' && !isPenyesuaian(tx) && !isTransfer(tx);
 }
 
 export function txJenis(tx: Transaction): Jenis {
-  return isTransfer(tx) ? 'Transfer' : tx.tipe;
+  if (isTransfer(tx)) return 'Transfer';
+  if (isPenyesuaian(tx)) return 'Penyesuaian';
+  return tx.tipe;
 }
 
 export function matchesJenis(tx: Transaction, jenis: JenisFilter): boolean {
