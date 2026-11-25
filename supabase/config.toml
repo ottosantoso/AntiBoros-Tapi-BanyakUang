@@ -1,0 +1,11 @@
+[functions.ai-analysis]
+verify_jwt = true
+
+[functions.ai-categorize]
+verify_jwt = true
+
+[functions.ai-chat]
+verify_jwt = true
+
+[functions.scan-image]
+verify_jwt = true
