@@ -5,6 +5,7 @@ import type { DashboardData, Transaction, WalletTransfer } from '@/lib/types';
 import type { TransactionSection } from '@/app/views';
 import { AddTransactionSheet, type SheetTab, type TxActions } from '@/components/add-transaction-sheet';
 import { SampahDialog } from '@/components/sampah-dialog';
+import { QuickEntryBar } from '@/components/quick-entry-bar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
@@ -370,6 +371,10 @@ export function TransactionsView({
           )}
         </div>
       </div>
+
+      {txSection !== 'transfer' && (
+        <QuickEntryBar wallets={data.dompet} addTransaction={addTransaction} onSaved={onChanged} />
+      )}
 
       <SampahDialog open={sampahOpen} onOpenChange={setSampahOpen} onChanged={onChanged} />
 
