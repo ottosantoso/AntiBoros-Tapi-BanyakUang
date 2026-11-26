@@ -120,3 +120,58 @@ export async function insertTransactions(
   if (error) return { success: false, error: error.message, saved: 0 };
   return { success: true, error: null, saved: inputs.length };
 }
+
+/* ---------- Sampah: hapus sementara, pulihkan, hapus permanen ---------- */
+
+/** Hapus sementara: baris tetap ada dan bisa dipulihkan dari Sampah. Saldo ikut disesuaikan oleh database. */
+export async function softDeleteTransactionRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase
+    .from('transactions')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('deleted_at', null);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Pulihkan transaksi dari Sampah. Saldo ikut disesuaikan oleh database. */
+export async function restoreTransactionRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase.from('transactions').update({ deleted_at: null }).eq('id', id);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Isi Sampah: transaksi yang sudah dihapus sementara, terbaru dihapus di atas. Dibatasi 200 baris. */
+export async function fetchSampahTransactions(): Promise<{ items: Transaction[]; error: string | null }> {
+  const [txRes, walRes] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select('*')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false })
+      .limit(200),
+    supabase.from('wallets').select('id,nama'),
+  ]);
+  if (txRes.error) return { items: [], error: txRes.error.message };
+  if (walRes.error) return { items: [], error: walRes.error.message };
+  const namaById = new Map(((walRes.data ?? []) as { id: string; nama: string }[]).map((w) => [w.id, w.nama]));
+  const items = ((txRes.data ?? []) as TransactionRow[]).map((r) => {
+    const t = transactionFromRow(r);
+    return { ...t, dompet: namaById.get(t.walletId ?? '') ?? 'Tanpa Dompet' };
+  });
+  return { items, error: null };
+}
+
+/** Hapus permanen satu transaksi dari Sampah. Hanya bekerja untuk baris yang sudah di Sampah. */
+export async function hardDeleteSampahRow(id: string): Promise<WriteResult> {
+  const { error } = await supabase.from('transactions').delete().eq('id', id).not('deleted_at', 'is', null);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Kosongkan Sampah: hapus permanen semua transaksi yang sudah di Sampah. Riwayatnya tetap ada di transaksi_log. */
+export async function emptySampah(): Promise<WriteResult> {
+  const { error } = await supabase.from('transactions').delete().not('deleted_at', 'is', null);
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
