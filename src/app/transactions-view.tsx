@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChevronDown,
 import { toast } from 'sonner';
 import type { DashboardData, Transaction, WalletTransfer } from '@/lib/types';
 import type { TransactionSection } from '@/app/views';
-import { AddTransactionSheet, type SheetTab, type TxActions } from '@/components/add-transaction-sheet';
+import { AddTransactionSheet, type SheetTab, type TxActions, type TxDraft } from '@/components/add-transaction-sheet';
 import { SampahDialog } from '@/components/sampah-dialog';
 import { QuickEntryBar } from '@/components/quick-entry-bar';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,7 @@ import { PaginationBar, usePagination } from '@/components/pagination-bar';
 import { cn } from '@/lib/utils';
 import { formatIDR } from '@/lib/format';
 import { softDeleteTransactionRow } from '@/lib/data';
+import type { QuickEntryDraft } from '@/lib/quick-entry';
 import { buildLaporanModel } from '@/lib/export/model';
 import { buatExcel } from '@/lib/export/excel';
 import { buatPdf } from '@/lib/export/pdf';
@@ -86,6 +87,8 @@ export function TransactionsView({
 }: Props) {
   const [sheetTab, setSheetTab] = useState<SheetTab | null>(null);
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
+  /** Isian awal untuk form transaksi baru, dari catat cepat yang ingin diedit dulu. */
+  const [draftForm, setDraftForm] = useState<TxDraft | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const [sampahOpen, setSampahOpen] = useState(false);
   const pendingDeletes = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -230,11 +233,26 @@ export function TransactionsView({
 
   function openCreate(tab: SheetTab) {
     setEditTarget(null);
+    setDraftForm(null);
     setSheetTab(tab);
+  }
+
+  /** Buka form transaksi baru dengan isian dari catat cepat. Belum disimpan sampai user menekan Simpan. */
+  function openFromDraft(d: QuickEntryDraft) {
+    setEditTarget(null);
+    setDraftForm({
+      tanggal: d.tanggal,
+      deskripsi: d.deskripsi,
+      tipe: d.tipe,
+      nominal: d.nominal,
+      walletId: d.walletId,
+    });
+    setSheetTab(d.tipe);
   }
 
   function openEdit(tx: Transaction) {
     setSheetTab(null);
+    setDraftForm(null);
     setEditTarget(tx);
   }
 
@@ -373,7 +391,7 @@ export function TransactionsView({
       </div>
 
       {txSection !== 'transfer' && (
-        <QuickEntryBar wallets={data.dompet} addTransaction={addTransaction} onSaved={onChanged} />
+        <QuickEntryBar wallets={data.dompet} addTransaction={addTransaction} onSaved={onChanged} onEdit={openFromDraft} />
       )}
 
       <SampahDialog open={sampahOpen} onOpenChange={setSampahOpen} onChanged={onChanged} />
@@ -619,6 +637,7 @@ export function TransactionsView({
           if (!open) {
             setSheetTab(null);
             setEditTarget(null);
+            setDraftForm(null);
           }
         }}
         wallets={data.dompet}
@@ -626,6 +645,7 @@ export function TransactionsView({
         initialTab={sheetTab ?? defaultTab}
         lockTab
         editing={editTarget}
+        draft={draftForm}
         existingTransactions={allTransactions}
         onDelete={editTarget ? () => handleDelete(editTarget) : undefined}
         addTransaction={addTransaction}

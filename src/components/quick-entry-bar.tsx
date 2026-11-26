@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { CalendarDays, Loader2, Wallet as WalletIcon, Zap } from 'lucide-react';
+import { CalendarDays, Loader2, Pencil, Wallet as WalletIcon, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -19,13 +19,15 @@ function formatTanggal(iso: string): string {
 }
 
 /**
- * Catat cepat: satu kolom teks, pratinjau sebelum simpan, lalu simpan. Subkategori ditebak dari deskripsi
- * dengan cara yang sama seperti form transaksi. Untuk perubahan lain, pakai tombol Pemasukan atau Pengeluaran.
+ * Catat cepat: satu kolom teks, pratinjau sebelum simpan, lalu simpan langsung.
+ * Tombol Edit membuka form transaksi dengan isian dari teks, supaya bisa diubah dulu.
+ * Subkategori ditebak dari deskripsi dengan cara yang sama seperti form transaksi.
  */
 export function QuickEntryBar({
   wallets,
   addTransaction,
   onSaved,
+  onEdit,
 }: {
   wallets: Wallet[];
   addTransaction: (input: {
@@ -38,6 +40,8 @@ export function QuickEntryBar({
     subkategoriId?: string | null;
   }) => Promise<{ success: boolean; error: string | null }>;
   onSaved: () => void;
+  /** Dipanggil dengan draf dari teks, untuk dibuka di form transaksi. */
+  onEdit: (draft: QuickEntryDraft) => void;
 }) {
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -105,14 +109,26 @@ export function QuickEntryBar({
             disabled={saving}
             className="h-11 flex-1 rounded-xl border-[#dbeafe] bg-[#f8fbff] text-sm font-bold text-[#172554]"
           />
-          <Button
-            type="submit"
-            disabled={!draft || saving || melebihiSaldo}
-            className="h-11 gap-2 rounded-xl bg-[#2563eb] font-extrabold text-white hover:bg-[#1d4ed8]"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Simpan
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!draft || saving}
+              onClick={() => draft && onEdit(draft)}
+              className="h-11 gap-2 rounded-xl border-[#bfdbfe] font-extrabold text-[#1d4ed8] hover:bg-[#eff6ff]"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+            <Button
+              type="submit"
+              disabled={!draft || saving || melebihiSaldo}
+              className="h-11 flex-1 gap-2 rounded-xl bg-[#2563eb] font-extrabold text-white hover:bg-[#1d4ed8] sm:flex-none"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Simpan
+            </Button>
+          </div>
         </div>
 
         {hasil && !hasil.ok && (
