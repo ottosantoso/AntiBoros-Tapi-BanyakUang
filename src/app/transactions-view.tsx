@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChevronDown, Download, FileSearch2, FileSpreadsheet, FileText, ListFilter, Loader2, PlusCircle, Search, SlidersHorizontal, WalletCards, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, ChevronDown, Download, FileSearch2, FileSpreadsheet, FileText, ListFilter, Loader2, PlusCircle, Search, SlidersHorizontal, Trash2, WalletCards, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DashboardData, Transaction, WalletTransfer } from '@/lib/types';
 import type { TransactionSection } from '@/app/views';
 import { AddTransactionSheet, type SheetTab, type TxActions } from '@/components/add-transaction-sheet';
+import { SampahDialog } from '@/components/sampah-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
@@ -13,6 +14,7 @@ import { TransactionTable } from '@/components/transaction-table';
 import { PaginationBar, usePagination } from '@/components/pagination-bar';
 import { cn } from '@/lib/utils';
 import { formatIDR } from '@/lib/format';
+import { softDeleteTransactionRow } from '@/lib/data';
 import { buildLaporanModel } from '@/lib/export/model';
 import { buatExcel } from '@/lib/export/excel';
 import { buatPdf } from '@/lib/export/pdf';
@@ -41,7 +43,8 @@ interface Props extends TxActions {
   loading: boolean;
   txSection: TransactionSection;
   onChanged: () => void;
-  removeTransaction: (id: string) => Promise<{ success: boolean; error: string | null }>;
+  /** Tidak lagi dipakai untuk hapus: hapus sekarang sementara (masuk Sampah). Tetap diterima agar pemanggil tidak berubah. */
+  removeTransaction?: (id: string) => Promise<{ success: boolean; error: string | null }>;
 }
 
 /** Tab form yang dibuka dari tombol di setiap submenu Transaksi. */
@@ -79,25 +82,21 @@ export function TransactionsView({
   addTransaction,
   editTransaction,
   addTransfer,
-  removeTransaction,
 }: Props) {
   const [sheetTab, setSheetTab] = useState<SheetTab | null>(null);
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+  const [sampahOpen, setSampahOpen] = useState(false);
   const pendingDeletes = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const removeRef = useRef(removeTransaction);
-
-  useEffect(() => {
-    removeRef.current = removeTransaction;
-  }, [removeTransaction]);
 
   // Penghapusan yang masih menunggu dijalankan saat halaman ditutup, supaya tidak hilang diam-diam.
+  // Hanya hapus sementara: baris tetap ada di Sampah dan bisa dipulihkan.
   useEffect(() => {
     const pending = pendingDeletes.current;
     return () => {
       pending.forEach((timer, id) => {
         clearTimeout(timer);
-        void removeRef.current(id);
+        void softDeleteTransactionRow(id);
       });
       pending.clear();
     };
@@ -257,11 +256,14 @@ export function TransactionsView({
     hideTransaction(id);
     const timer = setTimeout(async () => {
       pendingDeletes.current.delete(id);
-      const res = await removeRef.current(id);
+      // Hapus sementara: baris masuk ke Sampah dan bisa dipulihkan.
+      const res = await softDeleteTransactionRow(id);
       if (!res.success) {
         showTransaction(id);
         toast.error('Gagal menghapus transaksi', { description: res.error ?? undefined });
+        return;
       }
+      onChanged();
     }, UNDO_MS);
     pendingDeletes.current.set(id, timer);
     toast('Transaksi dihapus', {
@@ -347,6 +349,17 @@ export function TransactionsView({
             <Button
               size="sm"
               variant="outline"
+              onClick={() => setSampahOpen(true)}
+              className="h-10 gap-2 rounded-full border-[#e5e7eb] bg-white px-4 font-bold text-[#5b6f99] hover:bg-[#f8fafc]"
+            >
+              <Trash2 className="h-4 w-4" />
+              Sampah
+            </Button>
+          )}
+          {txSection !== 'transfer' && (
+            <Button
+              size="sm"
+              variant="outline"
               onClick={() => setExportOpen(true)}
               disabled={loading || filtered.length === 0}
               className="h-10 gap-2 rounded-full border-[#2563eb] bg-white px-4 font-bold text-[#2563eb] hover:bg-[#eff6ff]"
@@ -357,6 +370,8 @@ export function TransactionsView({
           )}
         </div>
       </div>
+
+      <SampahDialog open={sampahOpen} onOpenChange={setSampahOpen} onChanged={onChanged} />
 
       <Dialog open={exportOpen} onOpenChange={(open) => { if (!exporting) setExportOpen(open); }}>
         <DialogContent className="max-w-[calc(100vw-2rem)] rounded-2xl sm:max-w-md">
