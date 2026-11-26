@@ -7,11 +7,15 @@ import type { TransactionType, Wallet } from './types';
  *   15/04 25rb parkir GOPAY       -> pengeluaran 25.000, parkir, dompet GoPay, tanggal 15 April tahun ini
  *   +5jt gaji BCA                 -> pemasukan 5.000.000, gaji, dompet BCA, tanggal hari ini
  *   1,5jt makan siang Mandiri     -> pengeluaran 1.500.000 (koma sebagai desimal)
- *   1.500.000 belanja Blu         -> pengeluaran 1.500.000 (titik sebagai pemisah ribuan)
+ *   1.500.000 belanja Blu         -> pengeluaran 1.500.000, dompet "blu by BCA Digital" (nama singkat)
  *
  * Aturan:
  * - Nominal wajib. Angka + satuan: rb/ribu/k = 1.000, jt/juta = 1.000.000.
- * - Dompet dicocokkan dari akhir kalimat (tanpa membedakan huruf besar kecil). Kalau hanya ada satu dompet, dipakai otomatis.
+ * - Dompet dicocokkan dari akhir kalimat:
+ *   1. Nama lengkap (tanpa membedakan huruf besar kecil), misalnya "blu by BCA Digital".
+ *   2. Kata dari nama dompet, misalnya "Blu" atau "BCA". Kalau lebih dari satu dompet cocok,
+ *      dipilih yang kata pertama namanya sama. Kalau tetap ambigu, diminta menulis nama lengkap.
+ * - Kalau hanya ada satu dompet, dipakai otomatis.
  * - Tanggal opsional: dd/mm atau dd/mm/yyyy. Kalau tidak ada, hari ini.
  * - Tanda + di depan, atau kata gaji/bonus/thr/cashback/refund/komisi, menandai pemasukan. Lainnya pengeluaran.
  * - Sisa kata menjadi deskripsi.
@@ -61,6 +65,53 @@ function parseNominal(token: string): number | null {
   return Math.round(angka * satuan);
 }
 
+/**
+ * Cari dompet dari akhir teks. Mengembalikan dompet dan teks sisanya, atau null bila tidak ketemu.
+ * `error` diisi kalau ada kata yang cocok dengan lebih dari satu dompet dan tidak bisa dipilih pasti.
+ */
+function cariDompetDariAkhir(
+  text: string,
+  wallets: Wallet[],
+): { wallet: Wallet | null; sisa: string; error: string | null } {
+  const lower = text.toLowerCase();
+
+  // 1. Nama lengkap di akhir kalimat. Nama yang lebih panjang dicek dulu, supaya "blu by BCA" tidak terpotong jadi "BCA".
+  const sorted = [...wallets].sort((a, b) => b.nama.length - a.nama.length);
+  for (const w of sorted) {
+    const nama = w.nama.toLowerCase();
+    if (lower === nama || lower.endsWith(` ${nama}`)) {
+      return { wallet: w, sisa: text.slice(0, text.length - w.nama.length).trim(), error: null };
+    }
+  }
+
+  // 2. Satu atau dua kata terakhir cocok dengan salah satu kata di nama dompet.
+  const kata = text.split(' ').filter(Boolean);
+  for (const panjang of [2, 1]) {
+    if (kata.length < panjang) continue;
+    const ujung = kata.slice(-panjang).join(' ').toLowerCase();
+    const kandidat = wallets.filter((w) => {
+      const kataDompet = w.nama.toLowerCase().split(' ');
+      return panjang === 1 ? kataDompet.includes(ujung) : w.nama.toLowerCase().includes(ujung);
+    });
+    if (kandidat.length === 0) continue;
+    const pilih =
+      kandidat.length === 1
+        ? kandidat[0]
+        : kandidat.find((w) => w.nama.toLowerCase().split(' ')[0] === ujung);
+    if (!pilih) {
+      const daftar = kandidat.map((w) => w.nama).join(', ');
+      return {
+        wallet: null,
+        sisa: text,
+        error: `"${ujung}" cocok dengan lebih dari satu dompet (${daftar}). Tulis nama lengkapnya.`,
+      };
+    }
+    return { wallet: pilih, sisa: kata.slice(0, -panjang).join(' '), error: null };
+  }
+
+  return { wallet: null, sisa: text, error: null };
+}
+
 export function parseQuickEntry(input: string, wallets: Wallet[], today: Date = new Date()): QuickEntryResult {
   let text = input.trim().replace(/\s+/g, ' ');
   if (!text) return { ok: false, error: 'Tulis transaksi, contoh: 25rb parkir GOPAY' };
@@ -71,20 +122,11 @@ export function parseQuickEntry(input: string, wallets: Wallet[], today: Date = 
     text = text.slice(1).trim();
   }
 
-  // Dompet dicocokkan dari akhir kalimat. Nama yang lebih panjang dicek dulu, supaya "blu by BCA" tidak terpotong jadi "BCA".
-  let walletId = '';
-  let walletNama = '';
-  const sorted = [...wallets].sort((a, b) => b.nama.length - a.nama.length);
-  const lower = text.toLowerCase();
-  for (const w of sorted) {
-    const nama = w.nama.toLowerCase();
-    if (lower === nama || lower.endsWith(` ${nama}`)) {
-      walletId = w.id;
-      walletNama = w.nama;
-      text = text.slice(0, text.length - w.nama.length).trim();
-      break;
-    }
-  }
+  const cari = cariDompetDariAkhir(text, wallets);
+  if (cari.error) return { ok: false, error: cari.error };
+  text = cari.sisa;
+  let walletId = cari.wallet?.id ?? '';
+  let walletNama = cari.wallet?.nama ?? '';
   if (!walletId && wallets.length === 1) {
     walletId = wallets[0].id;
     walletNama = wallets[0].nama;
