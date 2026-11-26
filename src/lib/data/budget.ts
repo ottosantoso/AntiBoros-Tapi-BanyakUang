@@ -100,6 +100,7 @@ export async function fetchBudgetData(range: { start: string; end: string }): Pr
       supabase
         .from('transactions')
         .select('tipe,nominal,subkategori_id,kategori,transfer_id')
+        .is('deleted_at', null)
         .gte('tanggal', range.start)
         .lte('tanggal', range.end),
     ]);

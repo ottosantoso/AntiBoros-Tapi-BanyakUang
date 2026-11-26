@@ -15,6 +15,7 @@ export interface DataResult {
 /**
  * Dompet aktif saja yang masuk ke `dompet`, total saldo, dan dropdown.
  * Nama dompet arsip tetap dipakai untuk riwayat transaksi lama.
+ * Transaksi yang sudah dihapus sementara (deleted_at) tidak dibaca sama sekali.
  */
 export async function fetchDashboardData(range?: { start?: string; end?: string }): Promise<DataResult> {
   try {
@@ -25,6 +26,7 @@ export async function fetchDashboardData(range?: { start?: string; end?: string 
       supabase
         .from('transactions')
         .select('*')
+        .is('deleted_at', null)
         .order('tanggal', { ascending: false })
         .order('created_at', { ascending: false }),
     ]);

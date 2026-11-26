@@ -79,12 +79,16 @@ function akhirBulan(now: Date, monthOffset: number): string {
  * Data untuk halaman detail dompet dan persen di kartu. Saldo masa lalu dihitung mundur dari
  * saldo sekarang dan semua pergerakan setelahnya (transaksi dan transfer), sehingga tidak perlu
  * tabel riwayat saldo. Transfer dihitung di sini; biaya admin sudah tercatat sebagai transaksi.
+ * Transaksi yang sudah dihapus sementara (deleted_at) tidak dihitung.
  */
 export async function fetchWalletInsights(): Promise<WalletInsightsResult> {
   try {
     const [wRes, tRes, trRes] = await Promise.all([
       supabase.from('wallets').select('id,nama,saldo').eq('is_archived', false),
-      supabase.from('transactions').select('id,tanggal,deskripsi,tipe,nominal,kategori,wallet_id'),
+      supabase
+        .from('transactions')
+        .select('id,tanggal,deskripsi,tipe,nominal,kategori,wallet_id')
+        .is('deleted_at', null),
       supabase.from('wallet_transfers').select('id,tanggal,nominal,from_wallet_id,to_wallet_id'),
     ]);
     if (wRes.error) throw wRes.error;
