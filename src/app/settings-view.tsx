@@ -2,6 +2,7 @@ import { Clock, Info, ShieldCheck, Sparkles } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { MasterKategoriSettings } from '@/app/master-kategori-settings';
 import { BerulangSettings } from '@/app/berulang-settings';
+import { ResetDataSettings } from '@/components/reset-data-settings';
 
 interface Props {
   onSaved?: () => void;
@@ -14,9 +15,7 @@ const COMING_SOON = [
   'Backup dan ekspor data',
 ];
 
-// Prop onSaved tetap diterima karena App.tsx masih mengirimkannya.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function SettingsView(_props: Props) {
+export function SettingsView({ onSaved }: Props) {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
@@ -54,6 +53,8 @@ export function SettingsView(_props: Props) {
       <MasterKategoriSettings />
 
       <BerulangSettings />
+
+      <ResetDataSettings onChanged={() => onSaved?.()} />
 
       <Card className="p-6">
         <div className="flex items-start gap-3">
