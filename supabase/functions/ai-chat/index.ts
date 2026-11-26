@@ -3,6 +3,7 @@
 // - Kuota 20 pertanyaan per hari per user, dihitung di database (ai_chat_consume), tidak bisa dilewati dari browser.
 // - Yang dikirim ke Gemini hanya ringkasan angka: total, per kategori, status budget, saldo dompet, total transfer.
 //   Deskripsi transaksi, tanggal per transaksi, dan isi percakapan lama tidak dikirim.
+// - Transaksi yang sudah dihapus sementara (deleted_at) tidak ikut dihitung.
 // - GEMINI_API_KEY dari Supabase Secrets. verify_jwt = true.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -44,7 +45,12 @@ async function buildSummary(
   const awal = today.slice(0, 8) + '01';
 
   const [txRes, walRes, budRes, subRes, trRes] = await Promise.all([
-    sb.from('transactions').select('tanggal,tipe,nominal,kategori,subkategori_id').gte('tanggal', awal).lte('tanggal', today),
+    sb
+      .from('transactions')
+      .select('tanggal,tipe,nominal,kategori,subkategori_id')
+      .is('deleted_at', null)
+      .gte('tanggal', awal)
+      .lte('tanggal', today),
     sb.from('wallets').select('nama,saldo').eq('is_archived', false),
     sb.from('budgets').select('subkategori_id,limit_amount'),
     sb.from('subkategori').select('id,nama,kategori,jenis').eq('aktif', true),
@@ -141,7 +147,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const authHeader = req.headers.get('Authorization') ?? '';
-  const sb = createClient(Deno.env.get('SUPABASE_URL')!, (Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY'))!, {
+  const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
     global: { headers: { Authorization: authHeader } },
   });
 
