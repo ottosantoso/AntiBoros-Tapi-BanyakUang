@@ -1,4 +1,4 @@
-import { supabase } from './supabase-client';
+import { invokeAi } from './ai-invoke';
 
 /**
  * Saran subkategori dari deskripsi. Hanya memanggil Edge Function ai-categorize:
@@ -19,11 +19,11 @@ export async function categorizeDescription(
   deskripsi: string,
   tipe: 'Pemasukan' | 'Pengeluaran',
 ): Promise<{ saran: SaranKategori | null; error: string | null }> {
-  const { data, error } = await supabase.functions.invoke<{
+  const { data, error } = await invokeAi<{
     status?: string;
     data?: SaranKategori | null;
     message?: string;
-  }>('ai-categorize', { body: { deskripsi, tipe } });
+  }>('kategorisasi', 'ai-categorize', { body: { deskripsi, tipe } });
 
   if (error) return { saran: null, error: error.message };
   if (data?.status !== 'success') return { saran: null, error: data?.message ?? 'Saran kategori gagal.' };

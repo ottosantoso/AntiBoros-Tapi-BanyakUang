@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   fetchJumlahBelumDibaca,
   fetchNotifikasi,
+  fetchNotifikasiSistemAktif,
   sinkronkanNotifikasi,
   tandaiNotifikasiDibaca,
   tandaiSemuaDibaca,
@@ -30,14 +31,20 @@ export function NotificationBell({ className }: { className?: string }) {
   const [items, setItems] = useState<Notifikasi[]>([]);
   const [jumlah, setJumlah] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [sistem, setSistem] = useState<{ id: string; judul: string; isi: string; level: string }[]>([]);
 
   const muat = useCallback(async () => {
     setLoading(true);
     // Sinkron dulu supaya notifikasi terbaru (jatuh tempo, budget, saldo) muncul. Gagal sinkron tidak menghentikan tampilan.
     await sinkronkanNotifikasi();
-    const [{ items: daftar }, belum] = await Promise.all([fetchNotifikasi(), fetchJumlahBelumDibaca()]);
+    const [{ items: daftar }, belum, pengumuman] = await Promise.all([
+      fetchNotifikasi(),
+      fetchJumlahBelumDibaca(),
+      fetchNotifikasiSistemAktif(),
+    ]);
     setItems(daftar);
     setJumlah(belum);
+    setSistem(pengumuman);
     setLoading(false);
   }, []);
 
@@ -96,6 +103,25 @@ export function NotificationBell({ className }: { className?: string }) {
           )}
         </div>
         <div className="max-h-[60dvh] overflow-y-auto">
+          {sistem.length > 0 && (
+            <ul className="space-y-2 border-b border-border p-3">
+              {sistem.map((s) => (
+                <li
+                  key={s.id}
+                  className={cn(
+                    'rounded-xl border px-3 py-2.5',
+                    s.level === 'penting' && 'border-rose-500/30 bg-rose-500/10',
+                    s.level === 'peringatan' && 'border-amber-500/30 bg-amber-500/10',
+                    s.level !== 'penting' && s.level !== 'peringatan' && 'border-sky-500/30 bg-sky-500/10',
+                  )}
+                >
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Pengumuman sistem</p>
+                  <p className="mt-0.5 text-sm font-bold text-foreground">{s.judul}</p>
+                  <p className="mt-0.5 break-words text-xs text-muted-foreground">{s.isi}</p>
+                </li>
+              ))}
+            </ul>
+          )}
           {loading && items.length === 0 ? (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">Memuat…</p>
           ) : items.length === 0 ? (

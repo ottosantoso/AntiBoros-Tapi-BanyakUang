@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client';
+import { invokeAi } from '../ai-invoke';
 import type { MonthlyTrend } from '../types';
 import { shortMonth } from '../format';
 
@@ -135,11 +136,11 @@ export async function fetchAiAnalysis(payload: {
 }): Promise<AiAnalysisResult> {
   try {
     const d = payload.data;
-    const { data, error } = await supabase.functions.invoke<{
+    const { data, error } = await invokeAi<{
       status?: string;
       data?: { insights?: string[]; hemat?: string[] };
       message?: string;
-    }>('ai-analysis', {
+    }>('analisa', 'ai-analysis', {
       body: {
         periode: payload.periode,
         pemasukan: d.pemasukan,

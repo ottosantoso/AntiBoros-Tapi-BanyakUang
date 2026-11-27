@@ -1,4 +1,4 @@
-import { supabase } from '../supabase-client';
+import { invokeAi } from '../ai-invoke';
 
 /* ---------- Asisten Keuangan AI (Edge Function ai-chat) ---------- */
 
@@ -26,11 +26,11 @@ async function pesanDariError(error: unknown): Promise<string | null> {
  */
 export async function askAiChat(pertanyaan: string): Promise<AiChatResult> {
   try {
-    const { data, error } = await supabase.functions.invoke<{
+    const { data, error } = await invokeAi<{
       status?: string;
       data?: { jawaban?: string };
       message?: string;
-    }>('ai-chat', { body: { pertanyaan } });
+    }>('asisten', 'ai-chat', { body: { pertanyaan } });
 
     if (error) {
       const pesan = await pesanDariError(error);
