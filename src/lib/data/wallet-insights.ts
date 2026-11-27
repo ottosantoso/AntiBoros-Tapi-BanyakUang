@@ -1,5 +1,6 @@
 import { supabase } from '../supabase-client';
 import { shortMonth } from '../format';
+import { isKewajibanKategori } from '../transaction-view';
 import { toNumber } from './shared';
 
 /* ---------- Detail dompet: riwayat, grafik saldo, persen perubahan ---------- */
@@ -185,7 +186,7 @@ export async function fetchWalletInsights(): Promise<WalletInsightsResult> {
 
       const perKategori = new Map<string, number>();
       for (const r of riwayat) {
-        if (r.jenis !== 'Pengeluaran' || r.kategori === 'Penyesuaian Saldo') continue;
+        if (r.jenis !== 'Pengeluaran' || r.kategori === 'Penyesuaian Saldo' || isKewajibanKategori(r.kategori)) continue;
         if (r.tanggal < awalBulanIni || r.tanggal > akhirBulanIni) continue;
         const k = r.kategori ?? 'Tanpa kategori';
         perKategori.set(k, (perKategori.get(k) ?? 0) + r.nominal);

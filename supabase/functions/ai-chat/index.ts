@@ -19,7 +19,16 @@ const DAILY_LIMIT = 20;
 const MAX_QUESTION = 500;
 
 /** Kategori sistem tidak dihitung sebagai pemasukan atau pengeluaran riil. */
-const NON_REAL = new Set(['Transfer', 'Penyesuaian Saldo', 'Sistem']);
+const NON_REAL = new Set([
+  'Transfer',
+  'Penyesuaian Saldo',
+  'Sistem',
+  // Pokok utang dan piutang (Keputusan 27 Nov 2026). Bunga tetap riil dan tidak masuk daftar ini.
+  'Utang',
+  'Pembayaran Utang',
+  'Piutang',
+  'Pelunasan Piutang',
+]);
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

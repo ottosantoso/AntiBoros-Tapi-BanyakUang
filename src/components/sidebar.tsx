@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   List,
   PiggyBank,
+  HandCoins,
   BarChart3,
   ClipboardList,
   HeartPulse,
@@ -63,6 +64,7 @@ const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[
   { id: 'dashboard', label: 'Dashboard', hint: 'Ringkasan keuangan', icon: LayoutDashboard },
   { id: 'wallets', label: 'Dompet', hint: 'Kelola sumber dana', icon: Wallet },
   { id: 'budget', label: 'Budget', hint: 'Batas & target tabungan', icon: PiggyBank },
+  { id: 'utang', label: 'Utang & Piutang', hint: 'Pinjaman & tagihan', icon: HandCoins },
   { id: 'analisa', label: 'Analisa', hint: 'Tren & aliran dana', icon: BarChart3 },
   { id: 'rencana', label: 'Rencana', hint: 'Rencana pengeluaran bulanan', icon: CalendarRange },
 ];
