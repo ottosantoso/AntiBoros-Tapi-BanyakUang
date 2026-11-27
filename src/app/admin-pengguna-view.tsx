@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  cabutAksesPengguna,
   fetchDaftarPengguna,
   fetchPeranSaya,
   fetchStatusDukungan,
@@ -195,6 +196,7 @@ function DetailPengguna({
   const [mengirim, setMengirim] = useState(false);
   const [tx, setTx] = useState<TransaksiDukungan[] | null>(null);
   const [memuatTx, setMemuatTx] = useState(false);
+  const [mencabut, setMencabut] = useState(false);
 
   const idPengguna = pengguna?.id ?? null;
 
@@ -237,6 +239,20 @@ function DetailPengguna({
     setAlasan('');
     const status = await fetchStatusDukungan(idPengguna);
     setBerlakuSampai(status.berlakuSampai);
+  }
+
+  async function cabutSekarang() {
+    if (!idPengguna) return;
+    setMencabut(true);
+    const res = await cabutAksesPengguna(idPengguna);
+    setMencabut(false);
+    if (!res.success) {
+      toast.error('Gagal mencabut akses', { description: res.error ?? undefined });
+      return;
+    }
+    toast.success('Akses dukungan dicabut');
+    setBerlakuSampai(null);
+    setTx(null);
   }
 
   async function bukaTransaksi() {
@@ -306,12 +322,18 @@ function DetailPengguna({
                   <p className="flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                     <Unlock className="h-4 w-4" /> Aktif sampai {waktu(berlakuSampai)}
                   </p>
-                  {tx === null && (
-                    <Button type="button" onClick={() => void bukaTransaksi()} disabled={memuatTx} className="gap-2">
-                      {memuatTx && <Loader2 className="h-4 w-4 animate-spin" />}
-                      Lihat transaksi (100 terbaru)
+                  <div className="flex flex-wrap gap-2">
+                    {tx === null && (
+                      <Button type="button" onClick={() => void bukaTransaksi()} disabled={memuatTx} className="gap-2">
+                        {memuatTx && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Lihat transaksi (100 terbaru)
+                      </Button>
+                    )}
+                    <Button type="button" variant="outline" onClick={() => void cabutSekarang()} disabled={mencabut} className="gap-2">
+                      {mencabut && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Cabut akses
                     </Button>
-                  )}
+                  </div>
                   {tx !== null && (
                     <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
                       {tx.length === 0 && <p className="p-4 text-center text-sm text-muted-foreground">Belum ada transaksi.</p>}
