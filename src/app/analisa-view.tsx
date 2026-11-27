@@ -101,6 +101,11 @@ function short(n: number): string {
   return `Rp ${Math.round(n)}`;
 }
 
+/** Nama kategori untuk tampilan. "Transfer" di sini berarti uang dari atau ke pihak luar dompet terdaftar. */
+function labelKategori(k: string): string {
+  return k === 'Transfer' ? 'Transfer pihak luar' : k;
+}
+
 /* ---------- Perhitungan ---------- */
 
 function monthValue(t: MonthlyTrend, key: ChangeKey): number {
@@ -124,7 +129,7 @@ function buildInsights(d: AnalisaData, mode: Mode): string[] {
   const out: string[] = [];
   const top = d.perKategori[0];
   if (top && d.pengeluaran > 0) {
-    out.push(`Pengeluaran terbesar ada di kategori ${top.kategori} (${top.persen.toFixed(0)}%). Pertimbangkan untuk mengurangi pengeluaran di kategori ini.`);
+    out.push(`Pengeluaran terbesar ada di kategori ${labelKategori(top.kategori)} (${top.persen.toFixed(0)}%). Pertimbangkan untuk mengurangi pengeluaran di kategori ini.`);
   }
   if (d.rasioTabungan === null) {
     if (d.pengeluaran > 0) out.push('Belum ada pemasukan pada periode ini, jadi rasio tabungan belum bisa dihitung.');
@@ -146,6 +151,18 @@ function buildInsights(d: AnalisaData, mode: Mode): string[] {
     out.push(`Biaya admin transfer ${formatIDR(d.transfer.biayaAdmin)} dari ${d.transfer.jumlah} transfer antar-dompet.`);
   }
   return out.slice(0, 4);
+}
+
+/**
+ * Saldo dompet sekarang diambil dari data dashboard yang dikirim lewat syncKey.
+ * Dibaca dengan aman: kalau tidak ada, card rekonsiliasi tetap tampil tanpa angka saldo.
+ */
+function saldoDariSyncKey(syncKey: unknown): number | undefined {
+  if (syncKey && typeof syncKey === 'object' && 'totalSaldo' in syncKey) {
+    const v = Number((syncKey as { totalSaldo: unknown }).totalSaldo);
+    return Number.isFinite(v) ? v : undefined;
+  }
+  return undefined;
 }
 
 /* ---------- Halaman ---------- */
@@ -179,6 +196,7 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
   const loading = status === 'loading';
   const d = status === 'error' ? null : data;
   const isEmpty = status === 'ready' && d !== null && d.pemasukan === 0 && d.pengeluaran === 0;
+  const totalSaldo = saldoDariSyncKey(syncKey);
 
   const insights = useMemo(() => (d ? buildInsights(d, mode) : []), [d, mode]);
   const trendRows = useMemo<TrendRow[]>(
@@ -323,6 +341,8 @@ export function AnalisaView({ onGoTransactions, syncKey }: { onGoTransactions: (
                 }
               />
             </div>
+
+            <RekonsiliasiCard data={d} loading={loading} totalSaldo={totalSaldo} />
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
               <div className="lg:col-span-3">
@@ -611,6 +631,56 @@ function CardSkeleton({ rows = 4 }: { rows?: number }) {
 
 /* ---------- Kartu-kartu ---------- */
 
+/**
+ * Menghubungkan saldo dompet dengan angka Analisa. Saldo adalah stok (uang yang ada sekarang),
+ * Analisa adalah arus (uang yang masuk dan keluar di periode ini). Koreksi saldo menaikkan saldo
+ * dompet, tapi bukan pemasukan.
+ */
+function RekonsiliasiCard({
+  data,
+  loading,
+  totalSaldo,
+}: {
+  data: AnalisaData | null;
+  loading: boolean;
+  totalSaldo: number | undefined;
+}) {
+  if (loading || !data) return <CardSkeleton rows={2} />;
+  const koreksi = data.penyesuaian.masuk - data.penyesuaian.keluar;
+  return (
+    <Card className={CARD}>
+      <SectionHeader
+        icon={<Wallet className="h-5 w-5" />}
+        title="Saldo dompet dan analisa"
+        subtitle="Saldo adalah uang yang ada sekarang. Analisa hanya menghitung arus periode ini."
+      />
+      <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <RekonItem label="Saldo dompet sekarang" value={totalSaldo !== undefined ? formatIDR(totalSaldo) : '–'} />
+        <RekonItem label="Pemasukan periode" value={formatIDR(data.pemasukan)} />
+        <RekonItem label="Pengeluaran periode" value={formatIDR(data.pengeluaran)} />
+        <RekonItem
+          label="Koreksi saldo periode"
+          value={`${koreksi >= 0 ? '+' : '−'} ${formatIDR(Math.abs(koreksi))}`}
+          hint="tidak dihitung sebagai pemasukan"
+        />
+      </dl>
+      <p className="mt-4 text-xs font-medium text-[#5b6f99]">
+        Saldo dompet = saldo awal + semua pemasukan (termasuk koreksi) − semua pengeluaran ± transfer antar dompet.
+      </p>
+    </Card>
+  );
+}
+
+function RekonItem({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="rounded-xl bg-[#f5f8ff] p-3">
+      <dt className="text-xs font-bold text-[#5b6f99]">{label}</dt>
+      <dd className="mt-1 font-display text-base font-extrabold text-[#172554]">{value}</dd>
+      {hint && <p className="mt-0.5 text-[11px] font-medium text-[#5b6f99]">{hint}</p>}
+    </div>
+  );
+}
+
 function TrendCard({ data, loading }: { data: AnalisaData | null; loading: boolean }) {
   if (loading || !data) return <CardSkeleton rows={5} />;
   const points = data.tren.map((t) => ({ bulan: t.bulan, Pemasukan: t.pemasukan, Pengeluaran: t.pengeluaran }));
@@ -800,7 +870,7 @@ function CategoryCard({ data, loading }: { data: AnalisaData | null; loading: bo
   if (loading || !data) return <CardSkeleton rows={5} />;
 
   const segs = data.perKategori.slice(0, 4).map((k, i) => ({
-    name: k.kategori,
+    name: labelKategori(k.kategori),
     value: k.total,
     persen: k.persen,
     color: PALETTE[i % PALETTE.length],
@@ -864,7 +934,7 @@ function TopCard({ data, loading }: { data: AnalisaData | null; loading: boolean
                   <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-[10px] font-extrabold text-[#2563eb]">
                     {i + 1}
                   </span>
-                  <span className="min-w-0 truncate font-bold text-[#172554]">{row.kategori}</span>
+                  <span className="min-w-0 truncate font-bold text-[#172554]">{labelKategori(row.kategori)}</span>
                 </span>
                 <span className="shrink-0 font-extrabold text-[#172554]">
                   {formatIDR(row.total)} <span className="text-[#5b6f99]">{row.persen.toFixed(1)}%</span>
@@ -977,7 +1047,7 @@ function FlowCard({ data, loading }: { data: AnalisaData | null; loading: boolea
           <ul className="mt-2 space-y-1.5">
             {data.sumberPemasukan.map((s) => (
               <li key={s.kategori} className="flex items-center justify-between gap-3 text-xs">
-                <span className="min-w-0 truncate font-semibold text-[#172554]">{s.kategori}</span>
+                <span className="min-w-0 truncate font-semibold text-[#172554]">{labelKategori(s.kategori)}</span>
                 <span className="shrink-0 font-bold text-[#047857]">+ {formatIDR(s.total)}</span>
               </li>
             ))}
