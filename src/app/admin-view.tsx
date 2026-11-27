@@ -18,6 +18,8 @@ import { Card } from '@/components/ui/card';
 import { fetchAdminDashboard, type AdminDashboard } from '@/lib/data';
 import type { AdminSection } from '@/app/views';
 import { AdminPenggunaView } from '@/app/admin-pengguna-view';
+import { AdminLogView } from '@/app/admin-log-view';
+import { MonitorAiView, MonitorTransaksiView } from '@/app/admin-monitor-view';
 import { cn } from '@/lib/utils';
 
 const RENTANG = [7, 30, 90] as const;
@@ -88,7 +90,10 @@ export function AdminView({ section }: { section: AdminSection }) {
 
       {section === 'dashboard' && <DashboardAdmin />}
       {section === 'pengguna' && <AdminPenggunaView />}
-      {section !== 'dashboard' && section !== 'pengguna' && (
+      {section === 'log' && <AdminLogView />}
+      {section === 'transaksi' && <MonitorTransaksiView />}
+      {section === 'ai' && <MonitorAiView />}
+      {!['dashboard', 'pengguna', 'log', 'transaksi', 'ai'].includes(section) && (
         <Card className="grid place-items-center gap-2 p-10 text-center">
           <p className="font-display text-base font-bold">Segera hadir</p>
           <p className="max-w-sm text-sm text-muted-foreground">
