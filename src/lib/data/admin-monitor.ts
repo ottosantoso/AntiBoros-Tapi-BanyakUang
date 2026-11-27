@@ -12,30 +12,84 @@ const strOrNull = (v: unknown): string | null => (v === null || v === undefined 
 export interface LogAdmin {
   waktu: string;
   aksi: string;
+  modul: string;
   admin: string | null;
   adminIdSingkat: string;
   targetIdSingkat: string | null;
 }
 
-/** Log aksi admin, terbaru dulu. Filter aksi opsional. */
+export interface LogPage {
+  total: number;
+  items: LogAdmin[];
+}
+
+export interface FilterLog {
+  mulai: string;
+  selesai: string;
+  aksi: string | null;
+  modul: string | null;
+  cari: string | null;
+}
+
+/** Log aksi admin, terbaru dulu. Filter tanggal, aksi, modul, dan pencarian. */
 export async function fetchLogAktivitas(
-  aksi: string | null,
+  f: FilterLog,
   offset: number,
-): Promise<{ data: LogAdmin[]; error: string | null }> {
+  limit = 25,
+): Promise<{ data: LogPage | null; error: string | null }> {
   const { data, error } = await supabase.rpc('admin_log_aktivitas', {
-    p_aksi: aksi,
-    p_limit: 25,
+    p_mulai: f.mulai,
+    p_selesai: f.selesai,
+    p_aksi: f.aksi,
+    p_modul: f.modul,
+    p_cari: f.cari,
+    p_limit: limit,
     p_offset: offset,
   });
-  if (error) return { data: [], error: error.message };
+  if (error) return { data: null, error: error.message };
+  const raw = (data ?? {}) as Raw;
   return {
-    data: arr(data).map((r) => ({
-      waktu: str(r.waktu),
-      aksi: str(r.aksi),
-      admin: strOrNull(r.admin),
-      adminIdSingkat: str(r.admin_id_singkat),
-      targetIdSingkat: strOrNull(r.target_id_singkat),
-    })),
+    data: {
+      total: num(raw.total),
+      items: arr(raw.items).map((r) => ({
+        waktu: str(r.waktu),
+        aksi: str(r.aksi),
+        modul: str(r.modul) || 'Lainnya',
+        admin: strOrNull(r.admin),
+        adminIdSingkat: str(r.admin_id_singkat),
+        targetIdSingkat: strOrNull(r.target_id_singkat),
+      })),
+    },
+    error: null,
+  };
+}
+
+export interface LogRingkasan {
+  total: number;
+  totalSebelumnya: number;
+  adminAktif: number;
+  akunDisentuh: number;
+  perHari: { tanggal: string; total: number; akun: number }[];
+  aksiTerbanyak: { aksi: string; jumlah: number }[];
+}
+
+/** Angka ringkasan log untuk rentang tanggal (YYYY-MM-DD). Semua dihitung dari admin_audit. */
+export async function fetchLogRingkasan(
+  mulai: string,
+  selesai: string,
+): Promise<{ data: LogRingkasan | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('admin_log_ringkasan', { p_mulai: mulai, p_selesai: selesai });
+  if (error) return { data: null, error: error.message };
+  const raw = (data ?? {}) as Raw;
+  return {
+    data: {
+      total: num(raw.total),
+      totalSebelumnya: num(raw.total_sebelumnya),
+      adminAktif: num(raw.admin_aktif),
+      akunDisentuh: num(raw.akun_disentuh),
+      perHari: arr(raw.per_hari).map((r) => ({ tanggal: str(r.tanggal), total: num(r.total), akun: num(r.akun) })),
+      aksiTerbanyak: arr(raw.aksi_terbanyak).map((r) => ({ aksi: str(r.aksi), jumlah: num(r.jumlah) })),
+    },
     error: null,
   };
 }
