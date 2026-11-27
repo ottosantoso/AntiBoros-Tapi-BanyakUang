@@ -1,16 +1,22 @@
 import { supabase } from '../supabase-client';
 import { toNumber, type WriteResult } from './shared';
 
-/* ---------- Utang & piutang (fase 1: tanpa bunga, tanpa jadwal cicilan) ---------- */
+/* ---------- Utang, piutang, dan cicilan ---------- */
 
-export type JenisUtang = 'utang' | 'piutang';
+export type JenisUtang = 'utang' | 'piutang' | 'cicilan';
+export type MetodeBunga = 'flat' | 'anuitas' | 'tanpa_bunga';
+export type StatusAngsuran = 'belum' | 'lunas' | 'terlambat';
 
-export interface PembayaranUtang {
+/** Satu baris riwayat (utang/piutang) atau jadwal angsuran (cicilan). */
+export interface Angsuran {
   id: string;
   nomor: number;
-  tanggal: string;
-  jumlah: number;
-  transactionId: string | null;
+  jatuhTempo: string;
+  /** Tanggal pembayaran. Kosong kalau belum dibayar. */
+  dibayarPada: string;
+  pokok: number;
+  bunga: number;
+  status: StatusAngsuran;
 }
 
 export interface Utang {
@@ -18,13 +24,19 @@ export interface Utang {
   jenis: JenisUtang;
   pihak: string;
   pokok: number;
+  /** Pokok yang sudah dibayar (hanya baris berstatus lunas). */
   terbayar: number;
   sisa: number;
   tanggalMulai: string;
   status: 'aktif' | 'lunas' | 'dibatalkan';
   catatan: string | null;
   walletId: string | null;
-  pembayaran: PembayaranUtang[];
+  bungaPersen: number;
+  metodeBunga: MetodeBunga;
+  tenorBulan: number | null;
+  hariJatuhTempo: number | null;
+  /** Semua baris, diurutkan dari nomor terkecil. */
+  angsuran: Angsuran[];
 }
 
 interface DebtDbRow {
@@ -36,12 +48,18 @@ interface DebtDbRow {
   status: Utang['status'];
   catatan: string | null;
   wallet_id: string | null;
+  bunga_persen: number | string;
+  metode_bunga: MetodeBunga;
+  tenor_bulan: number | null;
+  hari_jatuh_tempo: number | null;
   debt_payments: {
     id: string;
     nomor: number;
+    jatuh_tempo: string;
     dibayar_pada: string | null;
     jumlah_pokok: number | string;
-    transaction_id: string | null;
+    jumlah_bunga: number | string;
+    status: StatusAngsuran;
   }[];
 }
 
@@ -49,23 +67,25 @@ export async function fetchUtang(): Promise<{ items: Utang[]; error: string | nu
   const { data, error } = await supabase
     .from('debts')
     .select(
-      'id,jenis,pihak,pokok,tanggal_mulai,status,catatan,wallet_id,created_at,debt_payments(id,nomor,dibayar_pada,jumlah_pokok,transaction_id)',
+      'id,jenis,pihak,pokok,tanggal_mulai,status,catatan,wallet_id,bunga_persen,metode_bunga,tenor_bulan,hari_jatuh_tempo,created_at,debt_payments(id,nomor,jatuh_tempo,dibayar_pada,jumlah_pokok,jumlah_bunga,status)',
     )
     .order('created_at', { ascending: false });
   if (error) return { items: [], error: error.message };
 
   const items = ((data ?? []) as DebtDbRow[]).map((r): Utang => {
     const pokok = toNumber(r.pokok);
-    const pembayaran = [...(r.debt_payments ?? [])]
+    const angsuran = [...(r.debt_payments ?? [])]
       .sort((a, b) => a.nomor - b.nomor)
-      .map((p) => ({
+      .map((p): Angsuran => ({
         id: p.id,
         nomor: p.nomor,
-        tanggal: p.dibayar_pada ?? '',
-        jumlah: toNumber(p.jumlah_pokok),
-        transactionId: p.transaction_id,
+        jatuhTempo: p.jatuh_tempo,
+        dibayarPada: p.dibayar_pada ?? '',
+        pokok: toNumber(p.jumlah_pokok),
+        bunga: toNumber(p.jumlah_bunga),
+        status: p.status,
       }));
-    const terbayar = pembayaran.reduce((s, p) => s + p.jumlah, 0);
+    const terbayar = angsuran.filter((a) => a.status === 'lunas').reduce((s, a) => s + a.pokok, 0);
     return {
       id: r.id,
       jenis: r.jenis,
@@ -77,14 +97,18 @@ export async function fetchUtang(): Promise<{ items: Utang[]; error: string | nu
       status: r.status,
       catatan: r.catatan,
       walletId: r.wallet_id,
-      pembayaran,
+      bungaPersen: toNumber(r.bunga_persen),
+      metodeBunga: r.metode_bunga,
+      tenorBulan: r.tenor_bulan,
+      hariJatuhTempo: r.hari_jatuh_tempo,
+      angsuran,
     };
   });
   return { items, error: null };
 }
 
 export interface CatatUtangInput {
-  jenis: JenisUtang;
+  jenis: Exclude<JenisUtang, 'cicilan'>;
   pihak: string;
   pokok: number;
   tanggal: string;
@@ -101,6 +125,46 @@ export async function catatUtang(input: CatatUtangInput): Promise<WriteResult> {
     p_tanggal: input.tanggal,
     p_wallet: input.walletId,
     p_catatan: input.catatan ?? null,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+export interface BuatCicilanInput {
+  pihak: string;
+  pokok: number;
+  bungaPersen: number;
+  metode: MetodeBunga;
+  tenor: number;
+  tanggalMulai: string;
+  hariJatuhTempo: number;
+  walletId: string;
+  catatan?: string;
+}
+
+/** Buat cicilan beserta seluruh jadwal angsuran dalam satu RPC. */
+export async function buatCicilan(input: BuatCicilanInput): Promise<WriteResult> {
+  const { error } = await supabase.rpc('buat_cicilan', {
+    p_pihak: input.pihak,
+    p_pokok: input.pokok,
+    p_bunga_persen: input.bungaPersen,
+    p_metode: input.metode,
+    p_tenor: input.tenor,
+    p_tanggal_mulai: input.tanggalMulai,
+    p_hari_jatuh_tempo: input.hariJatuhTempo,
+    p_wallet: input.walletId,
+    p_catatan: input.catatan ?? null,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Bayar satu angsuran cicilan. Pokok dan bunga masing-masing menjadi transaksi. */
+export async function bayarAngsuran(paymentId: string, walletId: string, tanggal: string): Promise<WriteResult> {
+  const { error } = await supabase.rpc('bayar_angsuran', {
+    p_payment: paymentId,
+    p_wallet: walletId,
+    p_tanggal: tanggal,
   });
   if (error) return { success: false, error: error.message };
   return { success: true, error: null };
