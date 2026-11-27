@@ -13,6 +13,7 @@ import {
   History,
   MessageSquare,
   Settings,
+  ShieldCheck,
   Sparkles,
   Tags,
   TrendingDown,
@@ -80,6 +81,7 @@ export function Sidebar({
   userEmail,
   onSignOut,
   open,
+  isAdmin,
 }: {
   view: View;
   txSection: TransactionSection;
@@ -92,6 +94,8 @@ export function Sidebar({
   onSignOut: () => void;
   /** Hanya berpengaruh di layar kecil (drawer). Di desktop sidebar selalu tampil. */
   open: boolean;
+  /** Menu Admin hanya tampil untuk akun admin. */
+  isAdmin: boolean;
 }) {
   const [txOpen, setTxOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(true);
@@ -249,6 +253,16 @@ export function Sidebar({
           label="Pengaturan"
           hint="Preferensi aplikasi"
         />
+
+        {isAdmin && (
+          <NavButton
+            active={view === 'admin'}
+            onClick={() => onNavigate('admin')}
+            icon={<ShieldCheck className="h-[18px] w-[18px]" strokeWidth={2.2} />}
+            label="Admin"
+            hint="Ringkasan aplikasi"
+          />
+        )}
       </nav>
 
       <div className="mx-3 mb-4 rounded-2xl border border-sidebar-border bg-background-elevated p-4">

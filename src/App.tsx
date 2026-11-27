@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/lib/theme';
 import { Sidebar } from '@/components/sidebar';
@@ -12,6 +12,8 @@ import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
 import { WalletDetailView } from '@/app/wallet-detail-view';
 import { BudgetView } from '@/app/budget-view';
+import { UtangView } from '@/app/utang-view';
+import { AdminView } from '@/app/admin-view';
 import { RencanaView } from '@/app/rencana-view';
 import { AnalisaView } from '@/app/analisa-view';
 import { TransactionsView } from '@/app/transactions-view';
@@ -21,6 +23,7 @@ import { SettingsView } from '@/app/settings-view';
 import { LoginView, SetPasswordView } from '@/app/login-view';
 import { supabase, supabaseConfigured } from '@/lib/supabase-client';
 import { useSession } from '@/lib/use-session';
+import { isAdmin as cekIsAdmin } from '@/lib/data';
 import { toast } from 'sonner';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
@@ -60,6 +63,22 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const [detailWalletId, setDetailWalletId] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Peran admin dicek di server lewat RPC. Kalau bukan admin, halaman admin tidak bisa dibuka.
+  useEffect(() => {
+    let aktif = true;
+    void cekIsAdmin().then((ok) => {
+      if (aktif) setIsAdmin(ok);
+    });
+    return () => {
+      aktif = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (view === 'admin' && !isAdmin) setView('dashboard');
+  }, [view, isAdmin]);
   const {
     data,
     status,
@@ -115,6 +134,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
           userEmail={userEmail}
           onSignOut={handleSignOut}
           open={navOpen}
+          isAdmin={isAdmin}
         />
 
         {navOpen && (
@@ -195,6 +215,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                 />
               )}
               {view === 'budget' && <BudgetView />}
+              {view === 'utang' && <UtangView wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'rencana' && <RencanaView />}
               {view === 'analisa' && (
                 <AnalisaView onGoTransactions={() => handleNavigate('transactions')} syncKey={data} />
@@ -208,6 +229,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
               )}
               {view === 'scanner' && <AiScannerPage wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'settings' && <SettingsView onSaved={handleRefresh} />}
+              {view === 'admin' && isAdmin && <AdminView />}
             </div>
           </main>
 
