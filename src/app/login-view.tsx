@@ -15,10 +15,16 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password wajib diisi'),
 });
 
+/** Versi dokumen Syarat & Ketentuan serta Kebijakan Privasi yang disetujui. Ganti saat dokumen berubah. */
+const VERSI_KETENTUAN = 'TOS-PRIVASI-2026-11-27';
+
 const signupSchema = z.object({
   name: z.string().trim().min(2, 'Nama minimal 2 karakter').max(80, 'Nama terlalu panjang'),
   email: emailField,
   password: z.string().min(8, 'Password minimal 8 karakter'),
+  setuju: z.boolean().refine((v) => v === true, {
+    message: 'Anda harus menyetujui Syarat & Ketentuan serta Kebijakan Privasi untuk membuat akun',
+  }),
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
@@ -50,7 +56,7 @@ export function LoginView() {
   });
   const signupForm = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { name: '', email: '', password: '' },
+    defaultValues: { name: '', email: '', password: '', setuju: false },
   });
 
   async function onLogin(values: LoginValues) {
@@ -70,7 +76,8 @@ export function LoginView() {
       email: values.email,
       password: values.password,
       options: {
-        data: { name: values.name },
+        // Persetujuan disalin ke tabel persetujuan_pengguna oleh trigger di database.
+        data: { name: values.name, persetujuan: { setuju: values.setuju, versi: VERSI_KETENTUAN } },
         // Link konfirmasi kembali ke alamat tempat aplikasi dibuka (localhost, atau domain deploy).
         emailRedirectTo: window.location.origin,
       },
@@ -234,6 +241,23 @@ export function LoginView() {
                     {...signupForm.register('password')}
                   />
                 </Field>
+                <div className="space-y-2">
+                  <label htmlFor="signup-setuju" className="flex cursor-pointer items-start gap-3 text-xs leading-relaxed text-[#4b5b80]">
+                    <input
+                      id="signup-setuju"
+                      type="checkbox"
+                      aria-invalid={!!signupErr.setuju}
+                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#2563eb]"
+                      {...signupForm.register('setuju')}
+                    />
+                    <span>
+                      Saya telah membaca, memahami, dan menyetujui Syarat & Ketentuan serta Kebijakan Privasi Hepeng History.
+                      Saya memahami bahwa seluruh data yang saya input bersifat privat dan hanya dapat diakses oleh akun saya sendiri,
+                      serta keamanan kredensial dan perangkat pribadi merupakan tanggung jawab saya.
+                    </span>
+                  </label>
+                  {signupErr.setuju && <p className="text-xs font-medium text-red-600">{signupErr.setuju.message}</p>}
+                </div>
                 <SubmitButton busy={busy} icon={<UserPlus className="h-4 w-4" />}>Buat akun</SubmitButton>
               </form>
             )}
