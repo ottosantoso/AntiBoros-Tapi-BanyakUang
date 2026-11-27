@@ -8,22 +8,28 @@ import {
   PiggyBank,
   HandCoins,
   BarChart3,
+  Bell,
+  Bot,
   ClipboardList,
   HeartPulse,
   History,
   MessageSquare,
+  Receipt,
+  ScrollText,
   Settings,
+  Settings2,
   ShieldCheck,
   Sparkles,
   Tags,
   TrendingDown,
   TrendingUp,
   LogOut,
+  Users,
   Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/logo';
-import type { View, TransactionSection, AiSection } from '@/app/views';
+import type { View, TransactionSection, AiSection, AdminSection } from '@/app/views';
 
 interface TxChild {
   id: TransactionSection;
@@ -61,6 +67,18 @@ const AI_CHILDREN: {
   { id: 'riwayat', label: 'Riwayat AI', icon: History, iconClass: 'text-sky-300', tileClass: 'bg-sky-500/15' },
 ];
 
+/** Sub-menu Admin. Yang belum dibuat tampil "Segera hadir" di halamannya. */
+const ADMIN_CHILDREN: { id: AdminSection; label: string; icon: typeof List; iconClass: string; tileClass: string }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, iconClass: 'text-sky-300', tileClass: 'bg-sky-500/15' },
+  { id: 'pengguna', label: 'Manajemen Pengguna', icon: Users, iconClass: 'text-emerald-300', tileClass: 'bg-emerald-500/15' },
+  { id: 'transaksi', label: 'Monitoring Transaksi', icon: Receipt, iconClass: 'text-violet-300', tileClass: 'bg-violet-500/15' },
+  { id: 'ai', label: 'Monitoring AI', icon: Bot, iconClass: 'text-amber-300', tileClass: 'bg-amber-500/15' },
+  { id: 'kategori', label: 'Manajemen Kategori', icon: Tags, iconClass: 'text-emerald-300', tileClass: 'bg-emerald-500/15' },
+  { id: 'log', label: 'Log Aktivitas', icon: ScrollText, iconClass: 'text-sky-300', tileClass: 'bg-sky-500/15' },
+  { id: 'sistem', label: 'Manajemen Sistem', icon: Settings2, iconClass: 'text-slate-300', tileClass: 'bg-slate-500/15' },
+  { id: 'notifikasi', label: 'Notifikasi Sistem', icon: Bell, iconClass: 'text-rose-300', tileClass: 'bg-rose-500/15' },
+];
+
 const TOP_ITEMS: { id: View; label: string; hint: string; icon: typeof Wallet }[] = [
   { id: 'dashboard', label: 'Dashboard', hint: 'Ringkasan keuangan', icon: LayoutDashboard },
   { id: 'wallets', label: 'Dompet', hint: 'Kelola sumber dana', icon: Wallet },
@@ -82,6 +100,8 @@ export function Sidebar({
   onSignOut,
   open,
   isAdmin,
+  adminSection,
+  onNavigateAdmin,
 }: {
   view: View;
   txSection: TransactionSection;
@@ -96,11 +116,15 @@ export function Sidebar({
   open: boolean;
   /** Menu Admin hanya tampil untuk akun admin. */
   isAdmin: boolean;
+  adminSection: AdminSection;
+  onNavigateAdmin: (section: AdminSection) => void;
 }) {
   const [txOpen, setTxOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(true);
   const txActive = view === 'transactions';
   const aiActive = view === 'ai' || view === 'scanner';
+  const adminActive = view === 'admin';
 
   return (
     <aside
@@ -255,13 +279,58 @@ export function Sidebar({
         />
 
         {isAdmin && (
-          <NavButton
-            active={view === 'admin'}
-            onClick={() => onNavigate('admin')}
-            icon={<ShieldCheck className="h-[18px] w-[18px]" strokeWidth={2.2} />}
-            label="Admin"
-            hint="Ringkasan aplikasi"
-          />
+          <div>
+            <button
+              type="button"
+              onClick={() => setAdminOpen((o) => !o)}
+              aria-expanded={adminOpen}
+              className={cn(
+                'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+                adminActive ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+              )}
+            >
+              <span
+                className={cn(
+                  'grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors',
+                  adminActive ? 'bg-primary text-primary-foreground shadow-[0_0_18px_rgba(59,130,246,0.45)]' : 'bg-white/5 text-muted-foreground group-hover:text-foreground',
+                )}
+              >
+                <ShieldCheck className="h-[18px] w-[18px]" strokeWidth={2.2} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={cn('block truncate text-sm font-bold', adminActive && 'text-primary')}>Admin</span>
+                <span className="block truncate text-[11px] font-medium text-muted-foreground">Ringkasan & pengelolaan aplikasi</span>
+              </span>
+              <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform duration-200', adminOpen && 'rotate-180')} />
+            </button>
+
+            {adminOpen && (
+              <div className="relative mt-1 ml-[26px] space-y-0.5 border-l border-sidebar-border pl-3">
+                {ADMIN_CHILDREN.map((child) => {
+                  const childActive = adminActive && adminSection === child.id;
+                  return (
+                    <button
+                      key={child.id}
+                      type="button"
+                      onClick={() => onNavigateAdmin(child.id)}
+                      className={cn(
+                        'relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold transition-colors',
+                        childActive ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
+                      )}
+                    >
+                      {childActive && (
+                        <span className="absolute -left-[13px] top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-primary" />
+                      )}
+                      <span className={cn('grid h-6 w-6 shrink-0 place-items-center rounded-md', child.tileClass)}>
+                        <child.icon className={cn('h-3.5 w-3.5', child.iconClass)} strokeWidth={2.4} />
+                      </span>
+                      <span className="truncate">{child.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
       </nav>
 
