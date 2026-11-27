@@ -28,21 +28,15 @@ interface NotifikasiDbRow {
   created_at: string;
 }
 
+/**
+ * Jenis yang bisa diatur di Pengaturan. Notifikasi budget (budget_80, budget_100) tidak ada di sini:
+ * banner budget di aplikasi sudah mengirimnya sejak #73, jadi tidak diatur lewat toggle ini.
+ */
 export const JENIS_NOTIFIKASI: { jenis: JenisNotifikasi; judul: string; deskripsi: string }[] = [
   {
     jenis: 'jatuh_tempo_utang',
     judul: 'Jatuh tempo utang & cicilan',
     deskripsi: 'Angsuran yang jatuh tempo dalam 3 hari ke depan, dan angsuran yang terlambat.',
-  },
-  {
-    jenis: 'budget_80',
-    judul: 'Budget hampir habis',
-    deskripsi: 'Pengeluaran satu kategori sudah mencapai 80% batas bulan ini.',
-  },
-  {
-    jenis: 'budget_100',
-    judul: 'Budget terlampaui',
-    deskripsi: 'Pengeluaran satu kategori sudah mencapai atau melewati batas bulan ini.',
   },
   {
     jenis: 'saldo_minus',
@@ -83,15 +77,6 @@ export async function fetchJumlahBelumDibaca(): Promise<number> {
     .is('dibaca_pada', null);
   if (error) return 0;
   return count ?? 0;
-}
-
-export async function tandaiNotifikasiDibaca(id: string): Promise<WriteResult> {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ dibaca_pada: new Date().toISOString() })
-    .eq('id', id);
-  if (error) return { success: false, error: error.message };
-  return { success: true, error: null };
 }
 
 export async function tandaiSemuaDibaca(): Promise<WriteResult> {

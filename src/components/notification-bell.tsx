@@ -52,7 +52,7 @@ export function NotificationBell({ className }: { className?: string }) {
 
   async function klik(n: Notifikasi) {
     if (!n.dibacaPada) {
-      await tandaiNotifikasiDibaca(n.id);
+      await tandaiNotifikasiDibaca([n.id]);
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, dibacaPada: new Date().toISOString() } : x)));
       setJumlah((j) => Math.max(0, j - 1));
     }

@@ -225,6 +225,8 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                   section={aiSection}
                   onOpen={setAiSection}
                   onOpenScanner={() => handleNavigate('scanner')}
+                  wallets={data.dompet}
+                  onSaved={handleRefresh}
                 />
               )}
               {view === 'scanner' && <AiScannerPage wallets={data.dompet} onSaved={handleRefresh} />}
