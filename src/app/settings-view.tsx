@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { MasterKategoriSettings } from '@/app/master-kategori-settings';
 import { BerulangSettings } from '@/app/berulang-settings';
 import { ResetDataSettings } from '@/components/reset-data-settings';
+import { NotifikasiSettings } from '@/app/notifikasi-settings';
 
 interface Props {
   onSaved?: () => void;
@@ -11,7 +12,6 @@ interface Props {
 const COMING_SOON = [
   'Profil: nama dan foto',
   'Preferensi: bahasa dan format tanggal',
-  'Notifikasi: pengingat budget dan transaksi berulang',
   'Backup dan ekspor data',
 ];
 
@@ -53,6 +53,8 @@ export function SettingsView({ onSaved }: Props) {
       <MasterKategoriSettings />
 
       <BerulangSettings />
+
+      <NotifikasiSettings />
 
       <ResetDataSettings onChanged={() => onSaved?.()} />
 

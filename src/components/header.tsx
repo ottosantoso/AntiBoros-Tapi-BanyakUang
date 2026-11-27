@@ -1,6 +1,7 @@
-import { AlertTriangle, ArrowLeftRight, BarChart3, Bell, CalendarRange, CheckCircle2, LayoutDashboard, List, LogOut, Menu, PiggyBank, HandCoins, RefreshCw, ScanLine, Settings, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, BarChart3, CalendarRange, CheckCircle2, LayoutDashboard, List, LogOut, Menu, PiggyBank, HandCoins, RefreshCw, ScanLine, Settings, ShieldCheck, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { NotificationBell } from '@/components/notification-bell';
 import { DateRangePicker } from '@/components/date-range-picker';
 import { cn } from '@/lib/utils';
 import type { DateRangeValue } from '@/lib/date-range';
@@ -93,9 +94,7 @@ export function Header({
         </Button>
 
         <ThemeToggle className="h-10 w-10 rounded-full border-border bg-card text-foreground" />
-        <button type="button" aria-label="Notifikasi" className="hidden h-10 w-10 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition hover:bg-accent/40 hover:text-foreground xl:flex">
-          <Bell className="h-[18px] w-[18px]" />
-        </button>
+        <NotificationBell />
         <div title={userEmail} className="hidden items-center gap-2.5 rounded-full bg-card py-1 pl-1 pr-3 ring-1 ring-border xl:flex">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{initialsOf(userName || userEmail)}</span>
           <span className="flex min-w-0 flex-col leading-tight">
@@ -125,6 +124,7 @@ const BASE_TITLES: Record<View, string> = {
   ai: 'AI Center',
   scanner: 'AI Scanner',
   settings: 'Pengaturan',
+  admin: 'Admin',
 };
 
 function LayoutIcon({ view, txSection }: { view: View; txSection: TransactionSection }) {
@@ -148,6 +148,7 @@ function LayoutIcon({ view, txSection }: { view: View; txSection: TransactionSec
     ai: Sparkles,
     scanner: ScanLine,
     settings: Settings,
+    admin: ShieldCheck,
   };
   const Icon = icons[view as Exclude<View, 'transactions'>];
   return <Icon className="h-5 w-5" strokeWidth={2.4} />;
