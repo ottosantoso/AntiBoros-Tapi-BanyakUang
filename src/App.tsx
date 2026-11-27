@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/lib/theme';
 import { Sidebar } from '@/components/sidebar';
 import { Header } from '@/components/header';
 import { AddWalletSheet } from '@/components/add-wallet-sheet';
+import { BudgetAlertBanner } from '@/components/budget-alert-banner';
 import { useDashboard } from '@/lib/use-dashboard';
 import { thisMonthRange, type DateRangeValue } from '@/lib/date-range';
 import type { View, TransactionSection, AiSection } from '@/app/views';
@@ -11,7 +12,6 @@ import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
 import { WalletDetailView } from '@/app/wallet-detail-view';
 import { BudgetView } from '@/app/budget-view';
-import { UtangView } from '@/app/utang-view';
 import { RencanaView } from '@/app/rencana-view';
 import { AnalisaView } from '@/app/analisa-view';
 import { TransactionsView } from '@/app/transactions-view';
@@ -145,6 +145,8 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
 
           <main className="flex-1 px-4 py-5 md:px-6 md:py-6">
             <div className="mx-auto max-w-[1440px] animate-fade-in">
+              <BudgetAlertBanner syncKey={`${data.totalSaldo}-${data.transaksi?.length ?? 0}`} />
+
               {error && status === 'error' && (
                 <div className="mb-4 flex flex-col gap-1 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
                   <span>Gagal memuat data. Coba muat ulang.</span>
@@ -193,7 +195,6 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                 />
               )}
               {view === 'budget' && <BudgetView />}
-              {view === 'utang' && <UtangView wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'rencana' && <RencanaView />}
               {view === 'analisa' && (
                 <AnalisaView onGoTransactions={() => handleNavigate('transactions')} syncKey={data} />
@@ -203,8 +204,6 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
                   section={aiSection}
                   onOpen={setAiSection}
                   onOpenScanner={() => handleNavigate('scanner')}
-                  wallets={data.dompet}
-                  onSaved={handleRefresh}
                 />
               )}
               {view === 'scanner' && <AiScannerPage wallets={data.dompet} onSaved={handleRefresh} />}
