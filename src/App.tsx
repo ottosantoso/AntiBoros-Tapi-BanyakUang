@@ -7,7 +7,7 @@ import { AddWalletSheet } from '@/components/add-wallet-sheet';
 import { BudgetAlertBanner } from '@/components/budget-alert-banner';
 import { useDashboard } from '@/lib/use-dashboard';
 import { thisMonthRange, type DateRangeValue } from '@/lib/date-range';
-import type { View, TransactionSection, AiSection } from '@/app/views';
+import type { View, TransactionSection, AiSection, AdminSection } from '@/app/views';
 import { DashboardView } from '@/app/dashboard-view';
 import { WalletsView } from '@/app/wallets-view';
 import { WalletDetailView } from '@/app/wallet-detail-view';
@@ -64,6 +64,8 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
   const [navOpen, setNavOpen] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangeValue>(() => thisMonthRange());
   const [isAdmin, setIsAdmin] = useState(false);
+  /** Sub-halaman menu Admin yang aktif. */
+  const [adminSection, setAdminSection] = useState<AdminSection>('dashboard');
 
   // Peran admin dicek di server lewat RPC. Kalau bukan admin, halaman admin tidak bisa dibuka.
   useEffect(() => {
@@ -112,6 +114,13 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
     setNavOpen(false);
   }, []);
 
+  const handleNavigateAdmin = useCallback((section: AdminSection) => {
+    setView('admin');
+    setAdminSection(section);
+    setDetailWalletId(null);
+    setNavOpen(false);
+  }, []);
+
   // Setelah keluar, useSession mengembalikan pengguna ke halaman masuk.
   const handleSignOut = useCallback(async () => {
     const { error: signOutError } = await supabase.auth.signOut();
@@ -135,6 +144,8 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
           onSignOut={handleSignOut}
           open={navOpen}
           isAdmin={isAdmin}
+          adminSection={adminSection}
+          onNavigateAdmin={handleNavigateAdmin}
         />
 
         {navOpen && (
@@ -231,7 +242,7 @@ function Workspace({ userName, userEmail }: { userName: string; userEmail: strin
               )}
               {view === 'scanner' && <AiScannerPage wallets={data.dompet} onSaved={handleRefresh} />}
               {view === 'settings' && <SettingsView onSaved={handleRefresh} />}
-              {view === 'admin' && isAdmin && <AdminView />}
+              {view === 'admin' && isAdmin && <AdminView section={adminSection} />}
             </div>
           </main>
 
