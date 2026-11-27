@@ -5,6 +5,7 @@ import type { AiSection } from '@/app/views';
 import { AiAsistenView } from '@/app/ai-asisten-view';
 import { AiRiwayatView } from '@/app/ai-riwayat-view';
 import { AiPrediksiView } from '@/app/ai-prediksi-view';
+import type { Wallet } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 type SubSection = Exclude<AiSection, 'hub'>;
@@ -52,10 +53,14 @@ export function AiCenterView({
   section,
   onOpen,
   onOpenScanner,
+  wallets,
+  onSaved,
 }: {
   section: AiSection;
   onOpen: (s: AiSection) => void;
   onOpenScanner: () => void;
+  wallets: Wallet[];
+  onSaved?: () => void;
 }) {
   if (section === 'hub') {
     return (
@@ -131,7 +136,7 @@ export function AiCenterView({
     return (
       <div className="space-y-5">
         {back}
-        <AiAsistenView />
+        <AiAsistenView wallets={wallets} onSaved={onSaved} />
       </div>
     );
   }
