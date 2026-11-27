@@ -20,3 +20,4 @@ export * from './data/utang';
 export * from './data/scan-batches';
 export * from './data/rencana';
 export * from './data/reset';
+export * from './data/notifikasi';
