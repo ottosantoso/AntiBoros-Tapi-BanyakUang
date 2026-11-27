@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client';
+import type { WriteResult } from './shared';
 
 /* ---------- Admin: hanya agregat dan data yang sudah disetujui untuk peran admin ---------- */
 
@@ -82,6 +83,95 @@ export async function fetchAdminDashboard(
         target: strOrNull(r.target),
       })),
     },
+    error: null,
+  };
+}
+
+/* ---------- Manajemen pengguna & akses dukungan ---------- */
+
+export interface PenggunaAdmin {
+  /** UUID lengkap. Null untuk peran analyst. */
+  id: string | null;
+  idSingkat: string;
+  nama: string | null;
+  email: string | null;
+  dibuat: string;
+  terakhirMasuk: string | null;
+  jumlahTransaksi: number;
+}
+
+export interface TransaksiDukungan {
+  tanggal: string;
+  deskripsi: string;
+  tipe: string;
+  nominal: number;
+  kategori: string;
+  dibuat: string;
+}
+
+/** Peran admin yang sedang masuk, misalnya ['super_admin', 'support']. */
+export async function fetchPeranSaya(): Promise<string[]> {
+  const { data, error } = await supabase.rpc('admin_peran_saya');
+  if (error || !Array.isArray(data)) return [];
+  return data as string[];
+}
+
+/** Daftar pengguna dengan pencarian dan paging (25 per halaman). */
+export async function fetchDaftarPengguna(
+  cari: string,
+  offset: number,
+): Promise<{ data: PenggunaAdmin[]; error: string | null }> {
+  const { data, error } = await supabase.rpc('admin_list_pengguna', {
+    p_cari: cari.trim() || null,
+    p_limit: 25,
+    p_offset: offset,
+  });
+  if (error) return { data: [], error: error.message };
+  return {
+    data: arr(data).map((r) => ({
+      id: strOrNull(r.id),
+      idSingkat: str(r.id_singkat),
+      nama: strOrNull(r.nama),
+      email: strOrNull(r.email),
+      dibuat: str(r.dibuat),
+      terakhirMasuk: strOrNull(r.terakhir_masuk),
+      jumlahTransaksi: num(r.jumlah_transaksi),
+    })),
+    error: null,
+  };
+}
+
+/** Batas waktu akses dukungan yang masih aktif untuk admin ini ke pengguna tertentu, atau null. */
+export async function fetchStatusDukungan(userId: string): Promise<{ berlakuSampai: string | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('admin_status_dukungan', { p_user: userId });
+  if (error) return { berlakuSampai: null, error: error.message };
+  return { berlakuSampai: strOrNull(data), error: null };
+}
+
+/** Minta akses dukungan (1 sampai 24 jam). Server mencatat permintaan di audit. */
+export async function mintaAksesDukungan(userId: string, alasan: string, jam: number): Promise<WriteResult> {
+  const { error } = await supabase.rpc('admin_minta_akses_dukungan', {
+    p_user: userId,
+    p_alasan: alasan,
+    p_jam: jam,
+  });
+  if (error) return { success: false, error: error.message };
+  return { success: true, error: null };
+}
+
+/** Transaksi pribadi pengguna. Hanya bisa dibuka saat akses dukungan aktif. Setiap pembacaan dicatat. */
+export async function fetchTransaksiDukungan(userId: string): Promise<{ data: TransaksiDukungan[]; error: string | null }> {
+  const { data, error } = await supabase.rpc('admin_transaksi_dukungan', { p_user: userId });
+  if (error) return { data: [], error: error.message };
+  return {
+    data: arr(data).map((r) => ({
+      tanggal: str(r.tanggal),
+      deskripsi: str(r.deskripsi),
+      tipe: str(r.tipe),
+      nominal: num(r.nominal),
+      kategori: str(r.kategori),
+      dibuat: str(r.dibuat),
+    })),
     error: null,
   };
 }
