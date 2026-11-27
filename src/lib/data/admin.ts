@@ -98,6 +98,8 @@ export interface PenggunaAdmin {
   dibuat: string;
   terakhirMasuk: string | null;
   jumlahTransaksi: number;
+  /** Akun sedang dinonaktifkan (tidak bisa masuk). */
+  dinonaktifkan: boolean;
 }
 
 export interface TransaksiDukungan {
@@ -136,6 +138,7 @@ export async function fetchDaftarPengguna(
       dibuat: str(r.dibuat),
       terakhirMasuk: strOrNull(r.terakhir_masuk),
       jumlahTransaksi: num(r.jumlah_transaksi),
+      dinonaktifkan: r.dinonaktifkan === true,
     })),
     error: null,
   };
