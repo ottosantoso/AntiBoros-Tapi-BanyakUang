@@ -9,3 +9,6 @@ verify_jwt = true
 
 [functions.scan-image]
 verify_jwt = true
+
+[functions.admin-kelola-pengguna]
+verify_jwt = true

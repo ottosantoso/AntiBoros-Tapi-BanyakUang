@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, LockKeyhole, Search, ShieldCheck, Unlock } from 'lucide-react';
+import { Ban, KeyRound, Loader2, LockKeyhole, Search, ShieldCheck, Trash2, Unlock, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,10 +9,13 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   cabutAksesPengguna,
   fetchDaftarPengguna,
+  fetchIdSaya,
+  jalankanAksiPengguna,
   fetchPeranSaya,
   fetchStatusDukungan,
   fetchTransaksiDukungan,
   mintaAksesDukungan,
+  type AksiPengguna,
   type PenggunaAdmin,
   type TransaksiDukungan,
 } from '@/lib/data';
@@ -46,12 +49,14 @@ export function AdminPenggunaView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [terpilih, setTerpilih] = useState<PenggunaAdmin | null>(null);
+  const [idSaya, setIdSaya] = useState<string | null>(null);
 
   // Akses dukungan hanya untuk super_admin dan support. Peran ini juga diperiksa di server.
   const bisaDukungan = peran.includes('super_admin') || peran.includes('support');
 
   useEffect(() => {
     void fetchPeranSaya().then(setPeran);
+    void fetchIdSaya().then(setIdSaya);
   }, []);
 
   const muat = useCallback(
@@ -124,7 +129,10 @@ export function AdminPenggunaView() {
                   className="cursor-pointer transition hover:bg-accent/40"
                 >
                   <td className="px-4 py-3">
-                    <p className="font-semibold">{p.nama ?? `ID ${p.idSingkat}`}</p>
+                    <p className="flex items-center gap-2 font-semibold">
+                      {p.nama ?? `ID ${p.idSingkat}`}
+                      {p.dinonaktifkan && <span className="rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">Nonaktif</span>}
+                    </p>
                     {p.email && <p className="text-xs text-muted-foreground">{p.email}</p>}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.idSingkat}</td>
@@ -143,7 +151,10 @@ export function AdminPenggunaView() {
             <li key={p.idSingkat}>
               <button type="button" onClick={() => setTerpilih(p)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-accent/40">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{p.nama ?? `ID ${p.idSingkat}`}</p>
+                  <p className="flex items-center gap-2 font-semibold">
+                    <span className="truncate">{p.nama ?? `ID ${p.idSingkat}`}</span>
+                    {p.dinonaktifkan && <span className="shrink-0 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">Nonaktif</span>}
+                  </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {p.email ?? `ID ${p.idSingkat}`} · {p.jumlahTransaksi.toLocaleString('id-ID')} transaksi
                   </p>
@@ -175,7 +186,18 @@ export function AdminPenggunaView() {
           : 'Peran analyst hanya melihat ID singkat dan angka agregat.'}
       </p>
 
-      <DetailPengguna pengguna={terpilih} bisaDukungan={bisaDukungan} onClose={() => setTerpilih(null)} />
+      <DetailPengguna
+        pengguna={terpilih}
+        bisaDukungan={bisaDukungan}
+        peran={peran}
+        idSaya={idSaya}
+        onClose={() => setTerpilih(null)}
+        onBerubah={() => {
+          setTerpilih(null);
+          setHalaman(0);
+          void muat(0, cari);
+        }}
+      />
     </div>
   );
 }
@@ -183,12 +205,46 @@ export function AdminPenggunaView() {
 function DetailPengguna({
   pengguna,
   bisaDukungan,
+  peran,
+  idSaya,
   onClose,
+  onBerubah,
 }: {
   pengguna: PenggunaAdmin | null;
   bisaDukungan: boolean;
+  peran: string[];
+  idSaya: string | null;
   onClose: () => void;
+  onBerubah: () => void;
 }) {
+  const [mengubahAkun, setMengubahAkun] = useState(false);
+  const [konfirmasiHapus, setKonfirmasiHapus] = useState('');
+
+  const bisaSuper = peran.includes('super_admin');
+  const bisaAdmin = bisaSuper || peran.includes('admin');
+  const bisaSupport = bisaAdmin || peran.includes('support');
+  const adalahSaya = !!pengguna?.id && pengguna.id === idSaya;
+  const bisaKelola = !!pengguna?.id && !adalahSaya && bisaSupport;
+
+  async function jalankanAksi(aksi: AksiPengguna, konfirmasi?: string) {
+    if (!pengguna?.id) return;
+    setMengubahAkun(true);
+    const res = await jalankanAksiPengguna(aksi, pengguna.id, konfirmasi);
+    setMengubahAkun(false);
+    if (!res.success) {
+      toast.error('Gagal', { description: res.error ?? undefined });
+      return;
+    }
+    if (aksi === 'kirim_reset_password') {
+      toast.success('Email reset password dikirim ke pengguna');
+      return;
+    }
+    toast.success(
+      aksi === 'hapus' ? 'Pengguna dihapus' : aksi === 'nonaktifkan' ? 'Akun dinonaktifkan' : 'Akun diaktifkan kembali',
+    );
+    setKonfirmasiHapus('');
+    onBerubah();
+  }
   const [berlakuSampai, setBerlakuSampai] = useState<string | null>(null);
   const [memuatStatus, setMemuatStatus] = useState(false);
   const [alasan, setAlasan] = useState('');
@@ -298,6 +354,75 @@ function DetailPengguna({
                 <dd className="text-xs">{waktu(pengguna.terakhirMasuk)}</dd>
               </div>
             </dl>
+
+            {bisaKelola && (
+              <section className="space-y-3 rounded-xl border border-border p-4">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-primary" />
+                  <h3 className="font-display text-sm font-bold">Kelola akun</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Status: {pengguna.dinonaktifkan ? 'Nonaktif (tidak bisa masuk)' : 'Aktif'}. Password tidak bisa dilihat admin.
+                </p>
+
+                <div className="flex flex-wrap gap-2">
+                  {bisaAdmin && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={mengubahAkun}
+                      onClick={() => void jalankanAksi(pengguna.dinonaktifkan ? 'aktifkan' : 'nonaktifkan')}
+                      className="gap-2"
+                    >
+                      {mengubahAkun ? <Loader2 className="h-4 w-4 animate-spin" /> : pengguna.dinonaktifkan ? <UserCheck className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+                      {pengguna.dinonaktifkan ? 'Aktifkan akun' : 'Nonaktifkan akun'}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={mengubahAkun}
+                    onClick={() => {
+                      if (window.confirm('Kirim email reset password ke pengguna ini?')) void jalankanAksi('kirim_reset_password');
+                    }}
+                    className="gap-2"
+                  >
+                    <KeyRound className="h-4 w-4" />
+                    Kirim email reset password
+                  </Button>
+                </div>
+
+                {bisaSuper && (
+                  <div className="space-y-2 rounded-lg border border-destructive/30 p-3">
+                    <p className="text-xs font-bold text-destructive">Hapus pengguna</p>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      Semua data pengguna ini ikut terhapus dan tidak bisa dikembalikan. Ketik email akun untuk konfirmasi.
+                    </p>
+                    <Input
+                      value={konfirmasiHapus}
+                      onChange={(e) => setKonfirmasiHapus(e.target.value)}
+                      placeholder={pengguna.email ?? ''}
+                      aria-label="Ketik email untuk konfirmasi hapus"
+                      disabled={!pengguna.email || mengubahAkun}
+                    />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      disabled={!pengguna.email || konfirmasiHapus.trim().toLowerCase() !== (pengguna.email ?? '').toLowerCase() || mengubahAkun}
+                      onClick={() => void jalankanAksi('hapus', konfirmasiHapus)}
+                      className="w-full gap-2"
+                    >
+                      {mengubahAkun ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      Hapus pengguna
+                    </Button>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {adalahSaya && (
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">Ini akun Anda sendiri. Pengubahan akun sendiri tidak tersedia di sini.</p>
+            )}
 
             <section className="space-y-3 rounded-xl border border-border p-4">
               <div className="flex items-center gap-2">
