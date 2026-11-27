@@ -1,4 +1,5 @@
 import { supabase } from '../supabase-client';
+import { isKewajibanKategori } from '../transaction-view';
 import type { TransactionType } from '../types';
 import { toNumber, type WriteResult } from './shared';
 
@@ -6,8 +7,15 @@ import { toNumber, type WriteResult } from './shared';
 
 export type Budgeting = 'Kebutuhan' | 'Keinginan' | 'Tabungan';
 
-/** Kategori sistem: bukan pemasukan/pengeluaran riil untuk analisa 50/30/20. */
-export const NON_REAL_KATEGORI = new Set(['Transfer', 'Penyesuaian Saldo']);
+/** Kategori sistem: bukan pemasukan/pengeluaran riil untuk analisa 50/30/20. Termasuk pokok utang dan piutang. */
+export const NON_REAL_KATEGORI = new Set([
+  'Transfer',
+  'Penyesuaian Saldo',
+  'Utang',
+  'Pembayaran Utang',
+  'Piutang',
+  'Pelunasan Piutang',
+]);
 
 export interface Subkategori {
   id: string;
@@ -117,7 +125,7 @@ export async function fetchBudgetData(range: { start: string; end: string }): Pr
     for (const r of (txRes.data ?? []) as TxAggDbRow[]) {
       const nominal = toNumber(r.nominal);
       // Koreksi saldo dan sisi transfer antar dompet bukan uang masuk/keluar riil. Pemasukan dari pihak luar tetap dihitung.
-      const isKoreksi = r.kategori === 'Penyesuaian Saldo';
+      const isKoreksi = r.kategori === 'Penyesuaian Saldo' || isKewajibanKategori(r.kategori);
       const isSisiTransfer = r.transfer_id !== null && r.kategori !== 'Biaya Admin';
       if (isKoreksi || isSisiTransfer) continue;
       if (r.tipe === 'Pemasukan') {

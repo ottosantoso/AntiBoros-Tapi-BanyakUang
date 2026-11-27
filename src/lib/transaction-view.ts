@@ -9,9 +9,26 @@ export const KATEGORI_PENYESUAIAN = 'Penyesuaian Saldo';
 /** Kategori sistem untuk biaya admin transfer. Ini pengeluaran riil. */
 export const KATEGORI_BIAYA_ADMIN = 'Biaya Admin';
 
+/**
+ * Kategori sistem untuk utang dan piutang. Keputusan 27 Nov 2026: uangnya memang masuk atau keluar dompet,
+ * tetapi pokok utang dan piutang bukan pemasukan atau pengeluaran riil. Bunga dan biaya tetap riil.
+ */
+export const KATEGORI_KEWAJIBAN = ['Utang', 'Pembayaran Utang', 'Piutang', 'Pelunasan Piutang'] as const;
+const KATEGORI_KEWAJIBAN_SET: ReadonlySet<string> = new Set(KATEGORI_KEWAJIBAN);
+
 /** Koreksi saldo dompet. Mengubah saldo, tapi bukan uang masuk atau keluar sungguhan. */
 export function isPenyesuaian(tx: Transaction): boolean {
   return tx.kategori === KATEGORI_PENYESUAIAN;
+}
+
+/** Transaksi utang atau piutang (termasuk pembayaran dan pelunasannya). Mengubah saldo, bukan pemasukan atau pengeluaran riil. */
+export function isKewajiban(tx: Transaction): boolean {
+  return isKewajibanKategori(tx.kategori);
+}
+
+/** Sama seperti isKewajiban, untuk data mentah yang hanya punya nama kategori. */
+export function isKewajibanKategori(kategori: string | null | undefined): boolean {
+  return kategori != null && KATEGORI_KEWAJIBAN_SET.has(kategori);
 }
 
 /**
@@ -24,12 +41,12 @@ export function isTransfer(tx: Transaction): boolean {
 
 /** Pemasukan yang benar-benar uang masuk: termasuk dari pihak luar (istri, dsb.), tidak termasuk koreksi atau sisi transfer. */
 export function isPemasukanRiil(tx: Transaction): boolean {
-  return tx.tipe === 'Pemasukan' && !isPenyesuaian(tx) && !isTransfer(tx);
+  return tx.tipe === 'Pemasukan' && !isPenyesuaian(tx) && !isTransfer(tx) && !isKewajiban(tx);
 }
 
 /** Pengeluaran yang benar-benar uang keluar: termasuk ke pihak luar dan biaya admin. */
 export function isPengeluaranRiil(tx: Transaction): boolean {
-  return tx.tipe === 'Pengeluaran' && !isPenyesuaian(tx) && !isTransfer(tx);
+  return tx.tipe === 'Pengeluaran' && !isPenyesuaian(tx) && !isTransfer(tx) && !isKewajiban(tx);
 }
 
 export function txJenis(tx: Transaction): Jenis {

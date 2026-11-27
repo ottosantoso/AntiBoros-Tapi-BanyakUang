@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeftRight, BarChart3, Bell, CalendarRange, CheckCircle2, LayoutDashboard, List, LogOut, Menu, PiggyBank, RefreshCw, ScanLine, Settings, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, BarChart3, Bell, CalendarRange, CheckCircle2, LayoutDashboard, List, LogOut, Menu, PiggyBank, HandCoins, RefreshCw, ScanLine, Settings, Sparkles, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { DateRangePicker } from '@/components/date-range-picker';
@@ -118,6 +118,7 @@ const BASE_TITLES: Record<View, string> = {
   dashboard: 'Dashboard',
   wallets: 'Dompet',
   budget: 'Budget',
+  utang: 'Utang & Piutang',
   analisa: 'Analisa',
   rencana: 'Rencana Bulanan',
   transactions: 'Transaksi',
@@ -141,6 +142,7 @@ function LayoutIcon({ view, txSection }: { view: View; txSection: TransactionSec
     dashboard: LayoutDashboard,
     wallets: Wallet,
     budget: PiggyBank,
+    utang: HandCoins,
     analisa: BarChart3,
     rencana: CalendarRange,
     ai: Sparkles,
