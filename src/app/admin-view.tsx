@@ -20,6 +20,7 @@ import type { AdminSection } from '@/app/views';
 import { AdminPenggunaView } from '@/app/admin-pengguna-view';
 import { AdminLogView } from '@/app/admin-log-view';
 import { MonitorAiView, MonitorTransaksiView } from '@/app/admin-monitor-view';
+import { KategoriAdminView, NotifikasiSistemAdminView, SistemAdminView } from '@/app/admin-sistem-view';
 import { cn } from '@/lib/utils';
 
 const RENTANG = [7, 30, 90] as const;
@@ -93,14 +94,9 @@ export function AdminView({ section }: { section: AdminSection }) {
       {section === 'log' && <AdminLogView />}
       {section === 'transaksi' && <MonitorTransaksiView />}
       {section === 'ai' && <MonitorAiView />}
-      {!['dashboard', 'pengguna', 'log', 'transaksi', 'ai'].includes(section) && (
-        <Card className="grid place-items-center gap-2 p-10 text-center">
-          <p className="font-display text-base font-bold">Segera hadir</p>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Menu {JUDUL_SECTION[section]} sedang disiapkan. Ringkasannya ada di Dashboard Admin.
-          </p>
-        </Card>
-      )}
+      {section === 'kategori' && <KategoriAdminView />}
+      {section === 'sistem' && <SistemAdminView />}
+      {section === 'notifikasi' && <NotifikasiSistemAdminView />}
     </div>
   );
 }

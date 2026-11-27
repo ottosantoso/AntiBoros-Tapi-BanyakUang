@@ -1,5 +1,6 @@
 import type { ScanPayload, ScanReceipt, ScanMutasi, ScanResult, ScanRow, TransactionType } from './types';
-import { supabase, supabaseConfigured } from './supabase-client';
+import { supabaseConfigured } from './supabase-client';
+import { invokeAi } from './ai-invoke';
 
 export interface ScanResponseResult {
   success: boolean;
@@ -14,11 +15,11 @@ export async function scanImage(payload: ScanPayload): Promise<ScanResponseResul
   }
 
   try {
-    const { data, error } = await supabase.functions.invoke<{
+    const { data, error } = await invokeAi<{
       status?: string;
       data?: ScanResult;
       message?: string;
-    }>('scan-image', {
+    }>('scan', 'scan-image', {
       body: { imageType: payload.imageType, imageBase64: payload.imageBase64 },
     });
 

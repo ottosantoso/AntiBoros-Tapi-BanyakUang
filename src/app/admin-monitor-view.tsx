@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Activity, Bot, Loader2, Receipt, RefreshCw, ScanLine, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Activity, ArrowLeftRight, Bot, Clock, Loader2, Receipt, RefreshCw, ScanLine, Trash2 } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { fetchMonitorAi, fetchMonitorTransaksi, type MonitorAi, type MonitorTransaksi } from '@/lib/data';
+import {
+  fetchKesehatanAi,
+  fetchMonitorAi,
+  fetchMonitorTransaksi,
+  type KesehatanAi,
+  type MonitorAi,
+  type MonitorTransaksi,
+} from '@/lib/data';
 import { cn } from '@/lib/utils';
 
 const RENTANG = [7, 30, 90] as const;
@@ -190,6 +197,8 @@ export function MonitorAiView() {
   const [data, setData] = useState<MonitorAi | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [kesehatan, setKesehatan] = useState<KesehatanAi | null>(null);
+  const [errorKesehatan, setErrorKesehatan] = useState<string | null>(null);
 
   const muat = (h: Rentang) => {
     setLoading(true);
@@ -198,6 +207,10 @@ export function MonitorAiView() {
       setData(r.data);
       setError(r.error);
       setLoading(false);
+    });
+    void fetchKesehatanAi(mulai, selesai).then((r) => {
+      setKesehatan(r.data);
+      setErrorKesehatan(r.error);
     });
   };
 
@@ -259,6 +272,52 @@ export function MonitorAiView() {
           </ul>
         </Card>
       </div>
+
+      <Card className="p-5">
+        <h3 className="font-display text-sm font-bold">Kesehatan AI</h3>
+        <p className="mb-4 text-xs text-muted-foreground">Latensi dan error dicatat saat fungsi AI dipanggil</p>
+        {errorKesehatan && <ErrorBox teks={errorKesehatan} />}
+        {kesehatan && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <KartuAngka icon={Activity} label="Total panggilan" value={kesehatan.total.toLocaleString('id-ID')} hint={`Dalam ${hari} hari`} tone="bg-sky-500/10 text-sky-600 dark:text-sky-400" />
+              <KartuAngka icon={Trash2} label="Error" value={kesehatan.error.toLocaleString('id-ID')} hint={kesehatan.total > 0 ? `${Math.round((kesehatan.error / kesehatan.total) * 100)}% dari total` : '-'} tone="bg-rose-500/10 text-rose-600 dark:text-rose-400" />
+              <KartuAngka icon={Clock} label="Rata-rata latensi" value={kesehatan.rataLatensi !== null ? `${kesehatan.rataLatensi} ms` : '-'} hint="Waktu tunggu balasan" tone="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" />
+              <KartuAngka icon={Clock} label="Latensi p95" value={kesehatan.p95Latensi !== null ? `${kesehatan.p95Latensi} ms` : '-'} hint="95% panggilan lebih cepat" tone="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Per fitur</p>
+                <ul className="divide-y divide-border">
+                  {kesehatan.perFitur.length === 0 && <li className="py-4 text-center text-sm text-muted-foreground">Belum ada panggilan.</li>}
+                  {kesehatan.perFitur.map((f) => (
+                    <li key={f.fitur} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="font-semibold">{f.fitur}</span>
+                      <span className="text-right text-xs tabular-nums text-muted-foreground">
+                        {f.jumlah} panggilan · {f.error} error
+                        {f.rataLatensi !== null ? ` · ${f.rataLatensi} ms` : ''}
+                        {f.p95 !== null ? ` · p95 ${f.p95} ms` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">Kode error</p>
+                <ul className="divide-y divide-border">
+                  {kesehatan.kodeError.length === 0 && <li className="py-4 text-center text-sm text-muted-foreground">Tidak ada error.</li>}
+                  {kesehatan.kodeError.map((k) => (
+                    <li key={k.kode} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="font-mono text-xs font-semibold">{k.kode}</span>
+                      <span className="text-xs tabular-nums text-muted-foreground">{k.jumlah}×</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
 
       <Card className="p-5">
         <h3 className="font-display text-sm font-bold">Pengguna asisten teraktif</h3>
