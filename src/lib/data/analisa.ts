@@ -38,6 +38,8 @@ export interface AnalisaData {
   sumberPemasukan: AnalisaSumber[];
   /** Transfer antar dompet: tidak dihitung sebagai pemasukan/pengeluaran. */
   transfer: { jumlah: number; total: number; biayaAdmin: number };
+  /** Koreksi saldo dompet periode ini. Tidak dihitung sebagai pemasukan atau pengeluaran. */
+  penyesuaian: { masuk: number; keluar: number };
 }
 
 export interface AnalisaResult {
@@ -72,6 +74,7 @@ export async function fetchAnalisa(range: { start: string; end: string }): Promi
     const r = asObject(data);
     const aliran = asObject(r.aliran_dana);
     const transfer = asObject(aliran.transfer);
+    const penyesuaian = asObject(r.penyesuaian_saldo);
     const rasio = r.rasio_tabungan;
 
     const tren: MonthlyTrend[] = asArray(r.tren_6_bulan).map((x) => {
@@ -111,6 +114,10 @@ export async function fetchAnalisa(range: { start: string; end: string }): Promi
           jumlah: asNumber(transfer.jumlah),
           total: asNumber(transfer.total),
           biayaAdmin: asNumber(transfer.biaya_admin),
+        },
+        penyesuaian: {
+          masuk: asNumber(penyesuaian.masuk),
+          keluar: asNumber(penyesuaian.keluar),
         },
       },
       error: null,
