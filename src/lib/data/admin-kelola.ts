@@ -3,7 +3,7 @@ import type { WriteResult } from './shared';
 
 /* ---------- Admin: kelola akun (nonaktifkan, aktifkan, reset password, hapus) lewat Edge Function ---------- */
 
-export type AksiPengguna = 'nonaktifkan' | 'aktifkan' | 'kirim_reset_password' | 'hapus';
+export type AksiPengguna = 'nonaktifkan' | 'aktifkan' | 'set_password' | 'kirim_reset_password' | 'hapus';
 
 /** ID akun yang sedang masuk. Dipakai untuk mencegah admin mengubah akunnya sendiri dari UI. */
 export async function fetchIdSaya(): Promise<string | null> {
@@ -13,17 +13,17 @@ export async function fetchIdSaya(): Promise<string | null> {
 
 /**
  * Jalankan satu aksi atas akun pengguna. Server memeriksa peran dan mencatat di admin_audit.
- * Password tidak pernah dilihat atau ditetapkan admin: reset dikirim lewat email ke pengguna.
+ * set_password hanya super_admin dan password tidak pernah dicatat. Reset lewat email tidak butuh password.
  */
 export async function jalankanAksiPengguna(
   aksi: AksiPengguna,
   target: string,
-  konfirmasi?: string,
+  opsi?: { konfirmasi?: string; password?: string },
 ): Promise<WriteResult> {
   try {
     const { data, error } = await supabase.functions.invoke<{ status?: string; message?: string }>(
       'admin-kelola-pengguna',
-      { body: { aksi, target, konfirmasi } },
+      { body: { aksi, target, konfirmasi: opsi?.konfirmasi, password: opsi?.password } },
     );
     if (error) {
       const ctx = (error as { context?: Response }).context;

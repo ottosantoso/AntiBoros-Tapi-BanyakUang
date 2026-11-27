@@ -219,6 +219,7 @@ function DetailPengguna({
 }) {
   const [mengubahAkun, setMengubahAkun] = useState(false);
   const [konfirmasiHapus, setKonfirmasiHapus] = useState('');
+  const [passwordBaru, setPasswordBaru] = useState('');
 
   const bisaSuper = peran.includes('super_admin');
   const bisaAdmin = bisaSuper || peran.includes('admin');
@@ -226,10 +227,10 @@ function DetailPengguna({
   const adalahSaya = !!pengguna?.id && pengguna.id === idSaya;
   const bisaKelola = !!pengguna?.id && !adalahSaya && bisaSupport;
 
-  async function jalankanAksi(aksi: AksiPengguna, konfirmasi?: string) {
+  async function jalankanAksi(aksi: AksiPengguna, opsi?: { konfirmasi?: string; password?: string }) {
     if (!pengguna?.id) return;
     setMengubahAkun(true);
-    const res = await jalankanAksiPengguna(aksi, pengguna.id, konfirmasi);
+    const res = await jalankanAksiPengguna(aksi, pengguna.id, opsi);
     setMengubahAkun(false);
     if (!res.success) {
       toast.error('Gagal', { description: res.error ?? undefined });
@@ -237,6 +238,11 @@ function DetailPengguna({
     }
     if (aksi === 'kirim_reset_password') {
       toast.success('Email reset password dikirim ke pengguna');
+      return;
+    }
+    if (aksi === 'set_password') {
+      toast.success('Password berhasil diubah');
+      setPasswordBaru('');
       return;
     }
     toast.success(
@@ -393,6 +399,36 @@ function DetailPengguna({
                 </div>
 
                 {bisaSuper && (
+                  <div className="space-y-2 rounded-lg border border-border p-3">
+                    <p className="text-xs font-bold">Ubah password</p>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      Hanya super_admin. Password tidak disimpan atau ditampilkan di log. Minimal 8 karakter.
+                    </p>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      value={passwordBaru}
+                      onChange={(e) => setPasswordBaru(e.target.value)}
+                      placeholder="Password baru"
+                      aria-label="Password baru"
+                      minLength={8}
+                      maxLength={72}
+                      disabled={mengubahAkun}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={passwordBaru.length < 8 || mengubahAkun}
+                      onClick={() => void jalankanAksi('set_password', { password: passwordBaru })}
+                      className="w-full gap-2"
+                    >
+                      {mengubahAkun && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Simpan password baru
+                    </Button>
+                  </div>
+                )}
+
+                {bisaSuper && (
                   <div className="space-y-2 rounded-lg border border-destructive/30 p-3">
                     <p className="text-xs font-bold text-destructive">Hapus pengguna</p>
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -409,7 +445,7 @@ function DetailPengguna({
                       type="button"
                       variant="destructive"
                       disabled={!pengguna.email || konfirmasiHapus.trim().toLowerCase() !== (pengguna.email ?? '').toLowerCase() || mengubahAkun}
-                      onClick={() => void jalankanAksi('hapus', konfirmasiHapus)}
+                      onClick={() => void jalankanAksi('hapus', { konfirmasi: konfirmasiHapus })}
                       className="w-full gap-2"
                     >
                       {mengubahAkun ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}

@@ -1,13 +1,14 @@
 // Edge Function: admin-kelola-pengguna
-// Aksi admin atas akun pengguna: nonaktifkan, aktifkan, kirim reset password, dan hapus.
+// Aksi admin atas akun pengguna: nonaktifkan, aktifkan, set_password, kirim_reset_password, dan hapus.
 // - verify_jwt = true. Peran dicek ulang di server lewat RPC admin_peran_saya (memakai JWT pemanggil).
 // - Service role hanya dipakai di sini, tidak pernah dikirim ke klien.
 // - Aturan peran:
 //     nonaktifkan / aktifkan  : super_admin atau admin. Akun dengan peran admin hanya oleh super_admin.
-//     kirim_reset_password    : super_admin, admin, atau support. Admin tidak pernah melihat atau menetapkan password.
+//     set_password            : hanya super_admin. Password tidak pernah dicatat (log maupun audit).
+//     kirim_reset_password    : super_admin, admin, atau support. Pengguna membuat password sendiri lewat email.
 //     hapus                   : hanya super_admin, dan akun dengan peran admin tidak bisa dihapus dari sini.
 //     Akun sendiri tidak bisa diubah lewat fungsi ini.
-// - Setiap aksi dicatat di admin_audit.
+// - Setiap aksi dicatat di admin_audit (tanpa isi password).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -17,12 +18,13 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const AKSI = ['nonaktifkan', 'aktifkan', 'kirim_reset_password', 'hapus'] as const;
+const AKSI = ['nonaktifkan', 'aktifkan', 'set_password', 'kirim_reset_password', 'hapus'] as const;
 type Aksi = (typeof AKSI)[number];
 
 const LABEL_AUDIT: Record<Aksi, string> = {
   nonaktifkan: 'nonaktifkan_pengguna',
   aktifkan: 'aktifkan_pengguna',
+  set_password: 'ubah_password_pengguna',
   kirim_reset_password: 'kirim_reset_password',
   hapus: 'hapus_pengguna',
 };
@@ -49,7 +51,7 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-  let body: { aksi?: unknown; target?: unknown; konfirmasi?: unknown };
+  let body: { aksi?: unknown; target?: unknown; konfirmasi?: unknown; password?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -79,12 +81,22 @@ Deno.serve(async (req) => {
   const izin: Record<Aksi, boolean> = {
     nonaktifkan: isAdmin,
     aktifkan: isAdmin,
+    set_password: isSuper,
     kirim_reset_password: isSupport,
     hapus: isSuper,
   };
   if (!izin[aksi]) return gagal('Peran Anda tidak boleh melakukan aksi ini.', 403);
 
   if (target === adminId) return gagal('Tidak bisa mengubah akun sendiri dari sini.', 400);
+
+  // Validasi password sebelum menyentuh data apa pun. Batas 72 byte adalah batas bcrypt.
+  if (aksi === 'set_password') {
+    if (typeof body.password !== 'string') return gagal('Password wajib diisi.', 400);
+    const panjang = new TextEncoder().encode(body.password).length;
+    if (body.password.length < 8 || panjang > 72) {
+      return gagal('Password minimal 8 karakter dan maksimal 72 byte.', 400);
+    }
+  }
 
   const admin = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
@@ -110,7 +122,7 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Catat dulu sebelum tindakan. target_user_id di-set null otomatis setelah akun dihapus.
+  // Catat dulu sebelum tindakan. Isi password tidak pernah ikut dicatat.
   await admin.from('admin_audit').insert({ admin_id: adminId, aksi: LABEL_AUDIT[aksi], target_user_id: target });
 
   if (aksi === 'nonaktifkan' || aksi === 'aktifkan') {
@@ -118,6 +130,12 @@ Deno.serve(async (req) => {
       ban_duration: aksi === 'nonaktifkan' ? NONAKTIF_SELAMANYA : 'none',
     });
     if (error) return gagal('Gagal mengubah status akun.', 500);
+    return json({ status: 'success' });
+  }
+
+  if (aksi === 'set_password') {
+    const { error } = await admin.auth.admin.updateUserById(target, { password: body.password as string });
+    if (error) return gagal('Gagal mengubah password.', 500);
     return json({ status: 'success' });
   }
 
